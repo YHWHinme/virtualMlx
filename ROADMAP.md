@@ -24,3 +24,12 @@
 - [ ] Tool calling for the Jarvis UI (tools TBD)
 - [ ] Machine control via the interface (open Steam, browser, etc.)
 - [ ] Barge-in with WebRTC AEC3 echo cancellation
+
+## Daemonize
+- [ ] Run the agent as a background daemon on the machine
+
+## Memory
+- [ ] Add mem0 (or similar memory tech) for better context management and chat history
+
+## Rust Port (distant future)
+- [ ] Port the full system to Rust

@@ -1,6 +1,7 @@
 [tools]
 uv = "latest"
 ruff = "latest"
+jujutsu = "latest"
 
 [tasks.go]
 run = "uv run main.py"
