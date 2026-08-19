@@ -3,5 +3,6 @@ __pycache__/
 *.pyc
 .model_cache/
 .ruff_cache/
+.jj/
 *.wav
 uv.lock

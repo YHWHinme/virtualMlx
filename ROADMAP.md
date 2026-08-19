@@ -1,6 +1,6 @@
 # Roadmap
 
-## MVP ← we are here
+## MVP
 - [x] Silero VAD for speech detection (local, ONNX)
 - [x] ONNXRuntime Smart Turn v3 for conversation end estimation
 - [x] Moonshine for local speech-to-text
@@ -9,10 +9,10 @@
 - [x] Conversation history (last 10 turns)
 - [x] Sentence-level streaming TTS dispatch
 
-## Barehands Integration
-- [ ] Wire barehands glass board as the visual interface
+## Barehands Integration ← we are here
+- [x] Wire barehands glass board as the visual interface
+- [x] Ring face: reflect agent state (idle / listening / thinking / speaking)
 - [ ] Hub swiping: feed notes and 3D models into the AI context via gestures
-- [ ] Ring face: reflect agent state (idle / listening / thinking / speaking)
 - [ ] Board commands: agent stages cards, images, and models on the glass
 
 ## LangChain Replacement

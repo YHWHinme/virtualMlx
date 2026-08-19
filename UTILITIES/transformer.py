@@ -8,6 +8,9 @@ Handles the two transformation steps in the pipeline:
 import urllib.request
 
 import numpy as np
+from rich.console import Console
+from rich.live import Live
+from rich.text import Text
 
 from config import (
     MODEL_CACHE_DIR,
@@ -16,7 +19,10 @@ from config import (
     TTS_SAMPLE_RATE,
     TTS_SPEED,
     TTS_VOICE,
+    TTS_VOLUME,
 )
+
+console = Console()
 
 # ── Kokoro model auto-download ───────────────────────────────────
 
@@ -36,14 +42,41 @@ def _ensure_kokoro_files() -> tuple[str, str]:
     voices_path = cache / "voices-v1.0.bin"
 
     if not model_path.exists():
-        print("  Downloading Kokoro model (~300 MB)…")
+        console.print("  Downloading Kokoro model (~300 MB)…")
         urllib.request.urlretrieve(_KOKORO_MODEL_URL, model_path)
 
     if not voices_path.exists():
-        print("  Downloading Kokoro voices (~300 MB)…")
+        console.print("  Downloading Kokoro voices (~300 MB)…")
         urllib.request.urlretrieve(_KOKORO_VOICES_URL, voices_path)
 
     return str(model_path), str(voices_path)
+
+
+# ── Loudness bar helper ──────────────────────────────────────────
+
+
+def _loudness_bar(level: int, volume: int = TTS_VOLUME, max_lvl: int = 20) -> Text:
+    """Build a 1-20 loudness indicator: filled blocks + empty + labels."""
+    filled = "█" * level
+    empty = "░" * (max_lvl - level)
+    return Text.assemble(
+        ("🔊 Vol:", "bold"),
+        (f"{volume:>2}", "bold yellow"),
+        (" | Loudness: ", ""),
+        (filled, "bold green"),
+        (empty, "dim"),
+        (f" {level}/{max_lvl}", "bold"),
+    )
+
+
+def _rms_to_level(samples: np.ndarray, max_lvl: int = 20) -> int:
+    """Map a chunk's RMS amplitude to a 1-20 level."""
+    if len(samples) == 0:
+        return 1
+    rms = float(np.sqrt(np.mean(samples.astype(np.float32) ** 2)))
+    # Speech RMS typically 0.02-0.30; map that range onto 1-20
+    level = int(1 + (rms / 0.30) * (max_lvl - 1))
+    return max(1, min(max_lvl, level))
 
 
 # ── Transformer class ────────────────────────────────────────────
@@ -56,18 +89,19 @@ class Transformer:
         # ── Moonshine STT ──
         from moonshine_voice import Transcriber, get_model_for_language
 
-        print("Loading Moonshine STT…")
+        console.print("Loading Moonshine STT…")
         ms_path, ms_arch = get_model_for_language("en")
         self._moonshine = Transcriber(model_path=str(ms_path), model_arch=ms_arch)
-        print("  Moonshine loaded ✓")
+        console.print("  Moonshine loaded [green]✓[/]")
 
         # ── Kokoro TTS ──
         from kokoro_onnx import Kokoro
 
-        print("Loading Kokoro TTS…")
+        console.print("Loading Kokoro TTS…")
         model_file, voices_file = _ensure_kokoro_files()
         self._kokoro = Kokoro(model_file, voices_file)
-        print(f"  Kokoro loaded ✓ (voice: {TTS_VOICE})")
+        console.print(f"  Kokoro loaded [green]✓[/] (voice: {TTS_VOICE}, "
+                      f"vol: {TTS_VOLUME}/20)")
 
     # ── STT ──────────────────────────────────────────────────────
 
@@ -90,22 +124,37 @@ class Transformer:
         )
         return samples, sr
 
-    def speak(self, text: str):
-        """Synthesize text and play it through the speakers via sounddevice."""
+    def speak(self, text: str, on_chunk=None):
+        """Synthesize text and play it through the speakers via sounddevice.
+
+        Applies the configured volume gain (TTS_VOLUME / 10) and shows a
+        live 1-20 loudness indicator during playback.  Optional
+        ``on_chunk(samples)`` callback receives each audio chunk so callers
+        (e.g. board.py) can stream a waveform to the barehands ring.
+        """
         import sounddevice as sd
 
         samples, sr = self.synthesize(text)
         if len(samples) == 0:
             return
 
+        # Apply volume gain (1-20 scale, 10 = normal 1.0x) + clip to avoid artifacts
+        gain = TTS_VOLUME / 10.0
+        samples = np.clip(samples * gain, -1.0, 1.0)
         data = samples.reshape(-1, 1).astype(np.float32)
 
         stream = sd.OutputStream(samplerate=sr, channels=1, dtype="float32")
         stream.start()
         try:
-            # 4096 samples ≈ 170ms at 24kHz — allows interrupt checks between frames
-            for i in range(0, len(data), 4096):
-                stream.write(data[i : i + 4096])
+            with Live(_loudness_bar(1), console=console, refresh_per_second=20) as live:
+                # 4096 samples ≈ 170ms at 24kHz
+                for i in range(0, len(data), 4096):
+                    chunk = data[i : i + 4096]
+                    stream.write(chunk)
+                    flat = chunk.flatten()
+                    live.update(_loudness_bar(_rms_to_level(flat)))
+                    if on_chunk is not None:
+                        on_chunk(flat)
         finally:
             stream.stop()
             stream.close()

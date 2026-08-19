@@ -21,6 +21,7 @@ TTS_VOICE = "am_michael"      # US English male (Kokoro v1.0)
 TTS_SPEED = 1.0
 TTS_LANG = "en-us"
 SENTENCE_MIN_CHARS = 20       # Min chars before dispatching a sentence
+TTS_VOLUME = int(os.getenv("TTS_VOLUME", "12"))  # 1-20 loudness (10 = normal)
 
 # ── LLM ──────────────────────────────────────────────────────────
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma4:cloud")
@@ -32,6 +33,11 @@ TEMPERATURE = 0.7
 # ── Microphone ───────────────────────────────────────────────────
 MIC_NAME = "UGREEN"           # Substring to match in device name
 MIC_DEVICE_INDEX: int | None = None  # None = auto-detect by MIC_NAME
+
+# ── Barehands ────────────────────────────────────────────────────
+BAREHANDS_DIR = Path("/home/oj2/projects/clones/barehands")
+BAREHANDS_PORT = int(os.getenv("BAREHANDS_PORT", "8794"))
+BAREHANDS_HOST = os.getenv("BAREHANDS_HOST", "127.0.0.1")
 
 # ── Paths ────────────────────────────────────────────────────────
 PROJECT_DIR = Path(__file__).parent

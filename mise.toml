@@ -8,6 +8,10 @@ herdr = "latest"
 run = "uv run main.py"
 description = "Run the VirtualMlx voice agent"
 
+[tasks.barehands]
+run = "uv run board.py"
+description = "Run the barehands glass-board server (blocking, foreground)"
+
 [tasks.lint]
 run = "ruff check"
 description = "Run the ruff linter"

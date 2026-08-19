@@ -197,7 +197,7 @@ class Listener:
                 stream.stop()
                 stream.close()
                 return rate
-            except Exception:  # noqa: BLE001, S112
+            except Exception:  # noqa: BLE001
                 continue
         # Last resort: use device default
         return int(self._device_info["default_samplerate"])
