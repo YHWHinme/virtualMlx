@@ -1,0 +1,116 @@
+{
+  "UTILITIES/__init__.py": {
+    "mtime": 1787165678.2458217,
+    "seen": 1787169611.780539,
+    "ast_hash": "bab18e7259ff797413d2500149350cce",
+    "semantic_hash": "bab18e7259ff797413d2500149350cce"
+  },
+  "UTILITIES/listener.py": {
+    "mtime": 1787164435.0418956,
+    "seen": 1787169611.780542,
+    "ast_hash": "84cd1a17972d77cbbb3fb1c66cedd2d7",
+    "semantic_hash": "84cd1a17972d77cbbb3fb1c66cedd2d7"
+  },
+  "UTILITIES/model.py": {
+    "mtime": 1787102984.1252382,
+    "seen": 1787169611.7805436,
+    "ast_hash": "7736e1c35d44b8d079b5c5654d83eb82",
+    "semantic_hash": "7736e1c35d44b8d079b5c5654d83eb82"
+  },
+  "UTILITIES/transformer.py": {
+    "mtime": 1787165729.8898184,
+    "seen": 1787169611.7805443,
+    "ast_hash": "b90d711a3cbeed2f659ea1a278763030",
+    "semantic_hash": "b90d711a3cbeed2f659ea1a278763030"
+  },
+  "board.py": {
+    "mtime": 1787165749.0598173,
+    "seen": 1787169611.7805448,
+    "ast_hash": "6252e0dfb29e90446414a646d4da29f1",
+    "semantic_hash": "6252e0dfb29e90446414a646d4da29f1"
+  },
+  "config.py": {
+    "mtime": 1787166035.9968503,
+    "seen": 1787169611.7805455,
+    "ast_hash": "b72118ef3870df006d2e80ef6ad955bc",
+    "semantic_hash": "b72118ef3870df006d2e80ef6ad955bc"
+  },
+  "main.py": {
+    "mtime": 1787169204.4831164,
+    "seen": 1787169611.780546,
+    "ast_hash": "ecaf55cffa5fa3be744fbd5af223a058",
+    "semantic_hash": "ecaf55cffa5fa3be744fbd5af223a058"
+  },
+  "pyproject.toml": {
+    "mtime": 1787164424.7208962,
+    "seen": 1787169611.7805467,
+    "ast_hash": "7692b4e76801e1e95a55d37b2e16f809",
+    "semantic_hash": "7692b4e76801e1e95a55d37b2e16f809"
+  },
+  ".agents/plans/2026-08-19T01-27-39-919Z-virtualmlx-mvp-build.md": {
+    "mtime": 1787102859.9262457,
+    "seen": 1787169611.7805471,
+    "ast_hash": "e029da6310de36f27eec34388e40f1bb",
+    "semantic_hash": "e029da6310de36f27eec34388e40f1bb"
+  },
+  "ANIMATIONS/animation_barehands.html": {
+    "mtime": 1787099868.941424,
+    "seen": 1787169611.7805476,
+    "ast_hash": "61e52a758cc63db31b9cf376c5e5bb58",
+    "semantic_hash": "61e52a758cc63db31b9cf376c5e5bb58"
+  },
+  "ANIMATIONS/animation_virtualJarvis.html": {
+    "mtime": 1787098414.8555107,
+    "seen": 1787169611.780548,
+    "ast_hash": "c7c20e74479aacfb9227c7cc30693670",
+    "semantic_hash": "c7c20e74479aacfb9227c7cc30693670"
+  },
+  "ANIMATIONS/animation_voiceloop.html": {
+    "mtime": 1787090144.702791,
+    "seen": 1787169611.7805488,
+    "ast_hash": "5601e47c535c34d77dfefd9d2082bf19",
+    "semantic_hash": "5601e47c535c34d77dfefd9d2082bf19"
+  },
+  "INSIGHTS/IMPLEMENTATION_BAREHANDS.md": {
+    "mtime": 1787099586.3294408,
+    "seen": 1787169611.7805493,
+    "ast_hash": "a6f064b05043165a9418c2ec1d6199c2",
+    "semantic_hash": "a6f064b05043165a9418c2ec1d6199c2"
+  },
+  "INSIGHTS/INSIGHT_BAREHANDS.md": {
+    "mtime": 1787099464.980448,
+    "seen": 1787169611.7805502,
+    "ast_hash": "82889b04e308a587a5a7e2cdc89b9df0",
+    "semantic_hash": "82889b04e308a587a5a7e2cdc89b9df0"
+  },
+  "INSIGHTS/INSIGHT_VIRTUALJARVIS.md": {
+    "mtime": 1787097901.8435411,
+    "seen": 1787169611.7805507,
+    "ast_hash": "b4b4457d99cc959a75299e972a069b5b",
+    "semantic_hash": "b4b4457d99cc959a75299e972a069b5b"
+  },
+  "INSIGHTS/INSIGHT_VOICELOOP.md": {
+    "mtime": 1787098945.848479,
+    "seen": 1787169611.7805512,
+    "ast_hash": "bb07eebe118cdf842d02840c70af4bec",
+    "semantic_hash": "bb07eebe118cdf842d02840c70af4bec"
+  },
+  "README.md": {
+    "mtime": 1787166039.1888,
+    "seen": 1787169611.7805517,
+    "ast_hash": "34a2018352e473464efec2a59a4c6a67",
+    "semantic_hash": "34a2018352e473464efec2a59a4c6a67"
+  },
+  "ROADMAP.md": {
+    "mtime": 1787165771.856816,
+    "seen": 1787169611.7805521,
+    "ast_hash": "1b53f891637455f23a965426f944fa98",
+    "semantic_hash": "1b53f891637455f23a965426f944fa98"
+  },
+  "SYSTEM.md": {
+    "mtime": 1787102873.6150496,
+    "seen": 1787169611.7805526,
+    "ast_hash": "f298bfdd632fd8038958c22d190ff02b",
+    "semantic_hash": "f298bfdd632fd8038958c22d190ff02b"
+  }
+}

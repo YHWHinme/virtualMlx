@@ -3,6 +3,7 @@ uv = "latest"
 ruff = "latest"
 jujutsu = "latest"
 herdr = "latest"
+"pipx:graphifyy" = "latest"
 
 [tasks.go]
 run = "uv run main.py"

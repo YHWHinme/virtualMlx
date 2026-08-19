@@ -9,16 +9,17 @@
 - [x] Conversation history (last 10 turns)
 - [x] Sentence-level streaming TTS dispatch
 
-## Barehands Integration ← we are here
+## LangChain Replacement ← we are here
+- [ ] Replace raw `ollama` package with LangChain
+- [ ] Structured prompt management
+- [ ] Better conversation memory (summarization, retrieval)
+- [ ] Websearch capabilities (via tool calling)
+
+## Barehands Integration
 - [x] Wire barehands glass board as the visual interface
 - [x] Ring face: reflect agent state (idle / listening / thinking / speaking)
 - [ ] Hub swiping: feed notes and 3D models into the AI context via gestures
 - [ ] Board commands: agent stages cards, images, and models on the glass
-
-## LangChain Replacement
-- [ ] Replace raw `ollama` package with LangChain
-- [ ] Structured prompt management
-- [ ] Better conversation memory (summarization, retrieval)
 
 ## Barehands Augmentation
 - [ ] Tool calling for the Jarvis UI (tools TBD)
