@@ -1,6 +1,8 @@
 [tools]
 uv = "latest"
 ruff = "latest"
+jujutsu = "latest"
+herdr = "latest"
 
 [tasks.go]
 run = "uv run main.py"
@@ -9,6 +11,3 @@ description = "Run the VirtualMlx voice agent"
 [tasks.lint]
 run = "ruff check"
 description = "Run the ruff linter"
-
-[env]
-STREAMING_MODE = "true"

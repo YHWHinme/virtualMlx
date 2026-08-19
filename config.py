@@ -29,6 +29,10 @@ MAX_HISTORY = 10              # Conversation turns in context
 MAX_TOKENS = 300
 TEMPERATURE = 0.7
 
+# ── Microphone ───────────────────────────────────────────────────
+MIC_NAME = "UGREEN"           # Substring to match in device name
+MIC_DEVICE_INDEX: int | None = None  # None = auto-detect by MIC_NAME
+
 # ── Paths ────────────────────────────────────────────────────────
 PROJECT_DIR = Path(__file__).parent
 SOUL_PATH = PROJECT_DIR / "SYSTEM.md"

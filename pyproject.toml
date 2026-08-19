@@ -15,4 +15,5 @@ dependencies = [
     "transformers>=4.38",
     "huggingface-hub>=0.20",
     "ollama>=0.4",
+    "rich>=13.0",
 ]
