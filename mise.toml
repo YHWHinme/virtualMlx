@@ -1,0 +1,12 @@
+[tools]
+herdr = "latest"
+jujutsu = "latest"
+ruff = "latest"
+uv = "latest"
+
+[tasks.go]
+run = "uv run main.py"
+
+[tasks.lint]
+run = "ruff check"
+description = "Runs the linter on the current codebase"

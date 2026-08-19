@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VirtualJarvis — Request Pipeline</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/@motionone/dom@10.18.0/dist/motion-umd.dev.js"></script>
+  <style>
+    *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+    :root{
+      --bg:#07090e;--sf:#0d1117;--bd:#1c2333;
+      --tx:#cdd6f4;--mu:#6c7086;
+      --bl:#89b4fa;--pk:#f5a9b8;--gn:#a6e3a1;--yl:#f9e2af;--rd:#f38ba8;--tp:#94e2d5;--mv:#cba6f7;
+      --mono:'JetBrains Mono',monospace;--sans:'DM Sans',sans-serif;
+    }
+    html{scroll-behavior:smooth}
+    body{background:var(--bg);color:var(--tx);font-family:var(--mono);font-size:14px;line-height:1.7;overflow-x:hidden}
+    ::selection{background:var(--bl);color:var(--bg)}
+
+    /* ── HERO ── */
+    .hero{
+      height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;
+      position:relative;background:radial-gradient(ellipse at 50% 35%,#111832 0%,var(--bg) 72%);
+    }
+    .hero::before{content:'';position:absolute;inset:0;
+      background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(137,180,250,.008) 2px,rgba(137,180,250,.008) 3px);
+      pointer-events:none}
+    .hero-tag{font-size:.68rem;letter-spacing:.35em;text-transform:uppercase;color:var(--bl);opacity:.5}
+    .hero h1{
+      font-family:var(--sans);font-size:clamp(2.5rem,5.8vw,4.8rem);font-weight:700;letter-spacing:-.03em;
+      text-align:center;
+      background:linear-gradient(135deg,var(--bl),#fff 50%,var(--pk));
+      -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-top:.4rem;
+    }
+    .hero-sub{color:var(--mu);font-size:.86rem;margin-top:.7rem;text-align:center;max-width:480px}
+    .hero-vs{
+      margin-top:1.8rem;padding:.5rem 1.2rem;border:1px solid var(--bd);border-radius:6px;
+      font-size:.68rem;color:var(--mu);background:var(--sf);
+    }
+    .hero-vs strong{color:var(--bl)}
+    #heroWave{width:min(88%,780px);height:60px;margin-top:1.6rem;opacity:.55}
+    .scroll-cue{position:absolute;bottom:2rem;display:flex;flex-direction:column;align-items:center;gap:.4rem;color:var(--mu);font-size:.62rem;letter-spacing:.15em}
+    .scroll-cue .arr{width:16px;height:16px;border-right:1.5px solid var(--bl);border-bottom:1.5px solid var(--bl);transform:rotate(45deg);animation:bob 2.2s ease-in-out infinite}
+    @keyframes bob{0%,100%{transform:rotate(45deg) translate(0,0)}50%{transform:rotate(45deg) translate(4px,4px)}}
+
+    /* ── PIPELINE BAR ── */
+    .pipeline{position:sticky;top:0;z-index:50;background:rgba(7,9,14,.93);backdrop-filter:blur(14px);border-bottom:1px solid var(--bd);padding:.8rem 1.5rem}
+    .pipe-row{display:flex;align-items:center;justify-content:center;gap:0;max-width:920px;margin:0 auto}
+    .pn{
+      display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;
+      border:2px solid var(--bd);background:var(--sf);font-size:.58rem;font-weight:700;color:var(--mu);
+      flex-shrink:0;position:relative;transition:all .35s ease;cursor:pointer;
+    }
+    .pn.on{border-color:var(--bl);color:var(--bl);box-shadow:0 0 12px rgba(137,180,250,.3)}
+    .pn.cloud{border-color:var(--yl)}
+    .pn.cloud.on{border-color:var(--yl);color:var(--yl);box-shadow:0 0 12px rgba(249,226,175,.3)}
+    .pn-line{width:36px;height:2px;background:var(--bd);flex-shrink:0;position:relative;overflow:hidden}
+    .pn-line::after{content:'';position:absolute;inset:0;background:var(--bl);transform:scaleX(0);transform-origin:left;transition:transform .5s ease}
+    .pn-line.on::after{transform:scaleX(1)}
+    .pn-tip{position:absolute;top:42px;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:.56rem;color:var(--mu);opacity:0;transition:opacity .2s;pointer-events:none}
+    .pn:hover .pn-tip{opacity:1}
+
+    /* ── STAGE SECTIONS ── */
+    .stage{min-height:88vh;display:flex;align-items:center;padding:5rem 2rem;position:relative}
+    .stage-inner{max-width:900px;margin:0 auto;width:100%}
+    .stage-num{font-size:5.5rem;font-weight:700;font-family:var(--sans);line-height:1;opacity:.05;position:absolute;top:3.5rem;right:2rem}
+    .badge{display:inline-block;padding:.12rem .6rem;border:1px solid var(--bd);border-radius:3px;font-size:.58rem;letter-spacing:.18em;text-transform:uppercase;color:var(--mu);margin-bottom:.7rem}
+    .stage h2{font-family:var(--sans);font-size:clamp(1.5rem,3.2vw,2.3rem);font-weight:700;line-height:1.2;margin-bottom:.35rem}
+    .hl-bl{color:var(--bl)}.hl-pk{color:var(--pk)}.hl-gn{color:var(--gn)}.hl-yl{color:var(--yl)}.hl-rd{color:var(--rd)}.hl-tp{color:var(--tp)}.hl-mv{color:var(--mv)}
+    .stage .imp{font-size:.82rem;font-weight:600;margin-bottom:1rem}
+    .stage .desc{color:var(--mu);max-width:580px;margin-bottom:1.4rem;font-size:.88rem}
+    .stage .desc strong{color:var(--tx);font-weight:500}
+    .role-tag{display:inline-block;padding:.1rem .45rem;border-radius:3px;font-size:.6rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;margin-left:.4rem;vertical-align:middle}
+    .role-io{background:rgba(249,226,175,.1);color:var(--yl);border:1px solid rgba(249,226,175,.2)}
+    .role-proc{background:rgba(137,180,250,.08);color:var(--bl);border:1px solid rgba(137,180,250,.18)}
+    .role-cloud{background:rgba(245,169,184,.08);color:var(--pk);border:1px solid rgba(245,169,184,.18)}
+    .role-out{background:rgba(166,227,161,.08);color:var(--gn);border:1px solid rgba(166,227,161,.18)}
+
+    /* ── CODE BLOCK ── */
+    .codeblk{background:#0a0e18;border:1px solid var(--bd);border-radius:6px;padding:1.1rem 1.3rem;font-size:.78rem;line-height:1.85;overflow-x:auto;margin:1rem 0;max-width:580px}
+    .codeblk .kw{color:var(--mv)}.codeblk .fn{color:var(--bl)}.codeblk .str{color:var(--gn)}.codeblk .cm{color:var(--mu);font-style:italic}.codeblk .num{color:var(--yl)}.codeblk .op{color:var(--pk)}
+
+    /* ── VIZ CONTAINERS ── */
+    .viz{margin:1.6rem 0;padding:1.4rem;background:var(--sf);border:1px solid var(--bd);border-radius:8px;position:relative}
+    .viz-label{font-size:.58rem;letter-spacing:.22em;text-transform:uppercase;color:var(--mu);margin-bottom:.9rem}
+    .viz canvas{display:block;width:100%;border-radius:4px}
+
+    /* ── DATA PILLS ── */
+    .pills{display:flex;flex-wrap:wrap;gap:.45rem;margin:.9rem 0}
+    .pill{padding:.28rem .65rem;background:rgba(137,180,250,.05);border:1px solid rgba(137,180,250,.12);border-radius:3px;font-size:.72rem;color:var(--bl);font-weight:500}
+    .pill.pk{background:rgba(245,169,184,.05);border-color:rgba(245,169,184,.12);color:var(--pk)}
+    .pill.yl{background:rgba(249,226,175,.05);border-color:rgba(249,226,175,.12);color:var(--yl)}
+    .pill.gn{background:rgba(166,227,161,.05);border-color:rgba(166,227,161,.12);color:var(--gn)}
+    .pill.tp{background:rgba(148,226,213,.05);border-color:rgba(148,226,213,.12);color:var(--tp)}
+
+    /* ── ENERGY METER ── */
+    .energy-row{margin-top:1rem;display:flex;align-items:center;gap:.7rem}
+    .energy-label{font-size:.65rem;color:var(--mu);min-width:50px}
+    .energy-track{flex:1;height:8px;background:var(--bd);border-radius:4px;overflow:hidden}
+    .energy-fill{height:100%;border-radius:4px;transition:width .15s ease;width:0}
+    .energy-val{font-size:.72rem;font-weight:600;min-width:70px;text-align:right;transition:color .2s}
+
+    /* ── STREAMING DIAGRAM ── */
+    .stream-diagram{display:flex;flex-direction:column;gap:.7rem;margin:1.2rem 0}
+    .stream-thread{display:flex;align-items:center;gap:.6rem;padding:.6rem .8rem;background:rgba(137,180,250,.03);border:1px solid var(--bd);border-radius:6px}
+    .thread-label{font-size:.6rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;min-width:72px;flex-shrink:0}
+    .thread-flow{display:flex;align-items:center;gap:.4rem;flex-wrap:wrap}
+    .thread-box{padding:.3rem .6rem;border:1px solid var(--bd);border-radius:4px;font-size:.68rem;background:var(--sf)}
+    .thread-arrow{color:var(--mu);font-size:.8rem;opacity:.5}
+    .thread-queue{padding:.25rem .5rem;border:2px dashed;border-radius:4px;font-size:.62rem;font-weight:600}
+
+    /* ── COMPARISON TABLE ── */
+    .cmp-table{width:100%;border-collapse:collapse;margin:1.2rem 0;font-size:.76rem}
+    .cmp-table th{text-align:left;padding:.5rem .7rem;border-bottom:2px solid var(--bd);color:var(--mu);font-weight:600;font-size:.62rem;letter-spacing:.12em;text-transform:uppercase}
+    .cmp-table td{padding:.5rem .7rem;border-bottom:1px solid rgba(28,35,51,.5)}
+    .cmp-table tr:hover td{background:rgba(137,180,250,.02)}
+    .cmp-table .feat{color:var(--mu);font-weight:500}
+    .cmp-table .has{color:var(--gn)}.cmp-table .miss{color:var(--rd)}.cmp-table .partial{color:var(--yl)}
+
+    /* ── NATIVE SECTION ── */
+    .native{padding:5rem 2rem;background:linear-gradient(180deg,var(--bg) 0%,#090d1a 100%);border-top:1px solid var(--bd)}
+    .native-inner{max-width:900px;margin:0 auto}
+    .native h2{font-family:var(--sans);font-size:2rem;font-weight:700;margin-bottom:.4rem}
+    .native .sub{color:var(--mu);font-size:.85rem;margin-bottom:2.2rem}
+    .mod-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:.9rem}
+    .mod-card{background:var(--sf);border:1px solid var(--bd);border-radius:6px;padding:1.1rem;transition:border-color .3s,box-shadow .3s}
+    .mod-card:hover{border-color:var(--bl);box-shadow:0 0 20px rgba(137,180,250,.05)}
+    .mod-card h3{font-family:var(--sans);font-size:.95rem;font-weight:600;margin-bottom:.3rem}
+    .mod-card .role{font-size:.68rem;color:var(--mu);margin-bottom:.45rem}
+    .mod-card code{font-size:.66rem;color:var(--bl);background:rgba(137,180,250,.04);padding:.08rem .28rem;border-radius:2px}
+
+    /* ── FOOTER ── */
+    footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--bd);color:var(--mu);font-size:.72rem}
+    footer a{color:var(--bl);text-decoration:none}
+
+    @media(max-width:700px){
+      .pn-line{width:18px}.pn{width:28px;height:28px;font-size:.48rem}
+      .stage{padding:3rem 1rem}.stage-num{font-size:3.5rem;right:1rem}
+      .codeblk{font-size:.7rem;padding:.8rem 1rem}
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════ HERO ═══════════════════════ -->
+<section class="hero">
+  <span class="hero-tag">voice assistant · python · cloud + local</span>
+  <h1>VirtualJarvis</h1>
+  <p class="hero-sub">How your voice travels from microphone through a cloud STT API, a remote LLM server, and Kokoro TTS — every package, every thread, every blocking call.</p>
+  <div class="hero-vs"><strong>vs Voice Loop:</strong> cloud STT instead of local · remote Ollama instead of MLX · file-based TTS playback · no VAD, no echo cancellation</div>
+  <canvas id="heroWave" width="780" height="60"></canvas>
+  <div class="scroll-cue"><span>SCROLL TO EXPLORE</span><div class="arr"></div></div>
+</section>
+
+<!-- ═══════════════════════ PIPELINE BAR ═══════════════════════ -->
+<nav class="pipeline">
+  <div class="pipe-row">
+    <div class="pn on" data-stage="0">SR<span class="pn-tip">SpeechRecognition</span></div>
+    <div class="pn-line"></div>
+    <div class="pn cloud" data-stage="1">API<span class="pn-tip">Google Cloud STT</span></div>
+    <div class="pn-line"></div>
+    <div class="pn" data-stage="2">LLM<span class="pn-tip">Ollama / Gemini</span></div>
+    <div class="pn-line"></div>
+    <div class="pn" data-stage="3">TTS<span class="pn-tip">Kokoro KPipeline</span></div>
+    <div class="pn-line"></div>
+    <div class="pn" data-stage="4">OUT<span class="pn-tip">ffplay / PyAudio</span></div>
+    <div class="pn-line"></div>
+    <div class="pn" data-stage="5">STR<span class="pn-tip">Streaming (test)</span></div>
+  </div>
+</nav>
+
+<!-- ═══════════════════════ STAGE 1: SpeechRecognition ═══════════════════════ -->
+<section class="stage" id="s0">
+  <span class="stage-num">01</span>
+  <div class="stage-inner">
+    <div class="badge">importance 10 / 10 <span class="role-tag role-io">input gate</span></div>
+    <h2><span class="hl-yl">SpeechRecognition</span> — the ears</h2>
+    <p class="imp hl-yl">The only way user input enters the system. Blocks the entire main thread until speech is captured.</p>
+    <p class="desc">
+      <strong>sr.Recognizer()</strong> opens the default microphone and uses <strong>energy-based</strong>
+      voice activity detection — not a neural network, just a simple amplitude threshold. It listens
+      until the energy drops below the calibrated noise floor for a brief period, then returns the
+      entire utterance as an <strong>AudioData</strong> object. This is sent to Google's API in the next stage.
+    </p>
+    <div class="pills">
+      <span class="pill yl">sr.Recognizer()</span>
+      <span class="pill yl">sr.Microphone()</span>
+      <span class="pill yl">.listen(source)</span>
+      <span class="pill yl">.adjust_for_ambient_noise()</span>
+      <span class="pill yl">.recognize_google(audio)</span>
+    </div>
+    <div class="viz">
+      <div class="viz-label">energy-based speech detection — simple amplitude threshold</div>
+      <canvas id="vizSR" height="80"></canvas>
+    </div>
+    <div class="energy-row">
+      <span class="energy-label">Energy</span>
+      <div class="energy-track"><div class="energy-fill" id="energyFill"></div></div>
+      <span class="energy-val" id="energyVal">calibrating...</span>
+    </div>
+    <div class="codeblk">
+      <span class="cm"># stt.py — the entire STT pipeline</span><br>
+      <span class="kw">def</span> <span class="fn">recordAudio</span>():<br>
+      &nbsp;&nbsp;recorder = sr.<span class="fn">Recognizer</span>()<br>
+      &nbsp;&nbsp;<span class="kw">with</span> sr.<span class="fn">Microphone</span>() <span class="kw">as</span> source:<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;recorder.<span class="fn">adjust_for_ambient_noise</span>(source, duration=<span class="num">0.2</span>)<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;audio = recorder.<span class="fn">listen</span>(source) <span class="cm"># ← BLOCKS until speech ends</span><br>
+      &nbsp;&nbsp;&nbsp;&nbsp;text = recorder.<span class="fn">recognize_google</span>(audio) <span class="cm"># ← HTTP to Google</span><br>
+      &nbsp;&nbsp;&nbsp;&nbsp;<span class="kw">return</span> text
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════ STAGE 2: Google Cloud STT ═══════════════════════ -->
+<section class="stage" id="s1">
+  <span class="stage-num">02</span>
+  <div class="stage-inner">
+    <div class="badge">importance 10 / 10 <span class="role-tag role-cloud">cloud dependency</span></div>
+    <h2><span class="hl-pk">Google Cloud STT</span> — internet required</h2>
+    <p class="imp hl-pk">The transcription happens in Google's cloud — no offline fallback in the main path.</p>
+    <p class="desc">
+      <strong>recognize_google()</strong> encodes the AudioData, sends it over HTTPS to Google's
+      Speech Recognition API, and returns the transcribed text. This is the same API that powers
+      Android's voice input. It's free for limited use but <strong>requires an active internet connection</strong>.
+      If the network is down or Google rejects the audio, the error is caught and the loop retries.
+    </p>
+    <div class="pills">
+      <span class="pill pk">recognize_google(audio)</span>
+      <span class="pill pk">→ str (transcript)</span>
+    </div>
+    <div class="viz">
+      <div class="viz-label">cloud round-trip — audio sent to Google, text returned</div>
+      <div id="cloudViz" style="display:flex;align-items:center;gap:.8rem;padding:1rem 0;flex-wrap:wrap">
+        <div style="padding:.5rem .9rem;border:1px solid var(--bd);border-radius:4px;background:var(--sf);text-align:center">
+          <div style="font-size:.6rem;color:var(--mu)">LOCAL</div>
+          <div style="font-size:.78rem;color:var(--yl)">AudioData</div>
+        </div>
+        <div id="cloudArrow" style="display:flex;align-items:center;gap:.3rem;flex:1;min-width:120px">
+          <div style="flex:1;height:2px;background:var(--pk);position:relative;overflow:hidden">
+            <div id="cloudPulse" style="position:absolute;width:20px;height:100%;background:var(--pk);border-radius:2px;left:-20px"></div>
+          </div>
+          <span style="font-size:.58rem;color:var(--pk)">HTTPS</span>
+          <div style="flex:1;height:2px;background:var(--pk);position:relative;overflow:hidden">
+            <div id="cloudPulse2" style="position:absolute;width:20px;height:100%;background:var(--gn);border-radius:2px;left:-20px"></div>
+          </div>
+        </div>
+        <div style="padding:.5rem .9rem;border:1px solid var(--bd);border-radius:4px;background:var(--sf);text-align:center">
+          <div style="font-size:.6rem;color:var(--mu)">GOOGLE CLOUD</div>
+          <div style="font-size:.78rem;color:var(--gn)">"text"</div>
+        </div>
+      </div>
+    </div>
+    <div class="codeblk">
+      <span class="cm"># The actual Google call (inside SpeechRecognition)</span><br>
+      <span class="cm"># POST https://www.google.com/speech-api/v2/recognize</span><br>
+      <span class="cm"># Body: FLAC-encoded audio data</span><br>
+      <span class="cm"># Response: JSON with transcript text</span><br><br>
+      <span class="cm"># Error handling:</span><br>
+      <span class="kw">except</span> sr.<span class="fn">RequestError</span> <span class="kw">as</span> e: <span class="cm"># network/API failure</span><br>
+      &nbsp;&nbsp;<span class="kw">return</span> <span class="str">"An error occured"</span><br>
+      <span class="kw">except</span> sr.<span class="fn">UnknownValueError</span>: <span class="cm"># Google couldn't understand</span><br>
+      &nbsp;&nbsp;<span class="cm"># → loop retries automatically</span>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════ STAGE 3: Ollama LLM ═══════════════════════ -->
+<section class="stage" id="s2">
+  <span class="stage-num">03</span>
+  <div class="stage-inner">
+    <div class="badge">importance 9 / 10 <span class="role-tag role-proc">remote LLM</span></div>
+    <h2><span class="hl-bl">Ollama</span> — the brain (remote server)</h2>
+    <p class="desc">
+      The transcript is sent to an <strong>Ollama server on the local network</strong> running
+      <strong>Gemma 3 4B</strong>. The <code>ollama</code> Python package is just an HTTP client —
+      the actual model runs on a separate machine. Two modes: <strong>blocking</strong> (full response)
+      and <strong>streaming</strong> (chunk-by-chunk yield).
+    </p>
+    <div class="pills">
+      <span class="pill">ollama.Client(host=...)</span>
+      <span class="pill">client.chat(model, messages)</span>
+      <span class="pill">client.chat(..., stream=True)</span>
+      <span class="pill yl">gemma3:4b</span>
+    </div>
+    <div class="viz">
+      <div class="viz-label">LLM response — token-by-token streaming to Ollama server</div>
+      <div id="tokenStream" style="display:flex;flex-wrap:wrap;gap:.3rem"></div>
+    </div>
+    <div class="codeblk">
+      <span class="cm"># ollama_model.py — remote LLM client</span><br>
+      client = <span class="fn">Client</span>(host=<span class="str">"http://172.16.5.39:3000"</span>)<br><br>
+      <span class="cm"># Blocking mode</span><br>
+      <span class="kw">def</span> <span class="fn">ollama_chat</span>(content):<br>
+      &nbsp;&nbsp;response = client.<span class="fn">chat</span>(model=<span class="str">'gemma3:4b'</span>,<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;messages=[{<span class="str">'role'</span>:<span class="str">'user'</span>, <span class="str">'content'</span>: content}])<br>
+      &nbsp;&nbsp;<span class="kw">return</span> response<br><br>
+      <span class="cm"># Streaming mode — yields chunks as they arrive</span><br>
+      <span class="kw">def</span> <span class="fn">ollama_chat_stream</span>(content):<br>
+      &nbsp;&nbsp;response = client.<span class="fn">chat</span>(model=<span class="str">'gemma3:4b'</span>, ..., stream=<span class="num">True</span>)<br>
+      &nbsp;&nbsp;<span class="kw">for</span> chunk <span class="kw">in</span> response:<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;<span class="kw">yield</span> chunk[<span class="str">'message'</span>][<span class="str">'content'</span>]
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════ STAGE 4: Kokoro TTS ═══════════════════════ -->
+<section class="stage" id="s3">
+  <span class="stage-num">04</span>
+  <div class="stage-inner">
+    <div class="badge">importance 9 / 10 <span class="role-tag role-proc">synthesis</span></div>
+    <h2><span class="hl-tp">Kokoro</span> — the voice</h2>
+    <p class="desc">
+      <strong>KPipeline</strong> combines text-to-phoneme conversion and phoneme-to-audio generation.
+      It yields <strong>(graphemes, phonemes, audio)</strong> tuples. The audio chunks are accumulated,
+      converted to a <strong>torch tensor</strong>, written to a <strong>WAV file</strong> via soundfile,
+      then played back through <strong>ffplay</strong> (an external process).
+    </p>
+    <div class="pills">
+      <span class="pill tp">KPipeline(lang_code='a')</span>
+      <span class="pill tp">pipeline(text, voice='af_heart')</span>
+      <span class="pill">torch.tensor(audio)</span>
+      <span class="pill gn">sf.write(file, audio, 24000)</span>
+    </div>
+    <div class="viz">
+      <div class="viz-label">TTS synthesis pipeline — text → phonemes → audio → file</div>
+      <canvas id="vizTTS" height="60"></canvas>
+    </div>
+    <div class="codeblk">
+      <span class="cm"># tts.py — Kokoro pipeline + file playback</span><br>
+      pipeline = <span class="fn">KPipeline</span>(lang_code=<span class="str">'a'</span>) <span class="cm"># US English</span><br><br>
+      <span class="kw">def</span> <span class="fn">speakText</span>(input_text):<br>
+      &nbsp;&nbsp;all_audio = []<br>
+      &nbsp;&nbsp;generator = <span class="fn">pipeline</span>(input_text, voice=<span class="str">'af_heart'</span>)<br>
+      &nbsp;&nbsp;<span class="kw">for</span> i, (gs, ps, audio) <span class="kw">in</span> <span class="fn">enumerate</span>(generator):<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;all_audio.<span class="fn">extend</span>(<span class="fn">list</span>(audio))<br><br>
+      &nbsp;&nbsp;all_audio = torch.<span class="fn">tensor</span>(all_audio)<br>
+      &nbsp;&nbsp;sf.<span class="fn">write</span>(filename, all_audio, <span class="num">24000</span>) <span class="cm"># write WAV to disk</span><br>
+      &nbsp;&nbsp;os.<span class="fn">system</span>(<span class="str">f"ffplay {filename} -autoexit -nodisp"</span>) <span class="cm"># shell out</span><br>
+      &nbsp;&nbsp;os.<span class="fn">remove</span>(filename) <span class="cm"># delete after playback</span>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════ STAGE 5: Audio Output ═══════════════════════ -->
+<section class="stage" id="s4">
+  <span class="stage-num">05</span>
+  <div class="stage-inner">
+    <div class="badge">importance 8 / 10 <span class="role-tag role-out">playback</span></div>
+    <h2><span class="hl-gn">ffplay</span> / <span class="hl-gn">PyAudio</span> — two output paths</h2>
+    <p class="imp hl-gn">main.py shells out to ffplay. test_pyaudio.py streams directly to hardware.</p>
+    <p class="desc">
+      The production path writes audio to a <strong>WAV file on disk</strong>, spawns an external
+      <strong>ffplay</strong> process, waits for it to finish, then deletes the file. High latency,
+      no interrupt capability. The test harness uses <strong>PyAudio</strong> for direct hardware
+      streaming in 1024-sample frames (~42ms at 24kHz), enabling true concurrent playback.
+    </p>
+    <div class="pills">
+      <span class="pill gn">os.system("ffplay ...")</span>
+      <span class="pill gn">sf.write(file, audio, 24000)</span>
+      <span class="pill gn">pyaudio.PyAudio()</span>
+      <span class="pill gn">stream.write(chunk.tobytes())</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0">
+      <div class="viz" style="margin:0">
+        <div class="viz-label">path a: ffplay (main.py) — file-based</div>
+        <div style="font-size:.72rem;line-height:1.8">
+          <div style="color:var(--yl)">1. sf.write("chunk.wav")</div>
+          <div style="color:var(--mu)">↓ disk I/O</div>
+          <div style="color:var(--yl)">2. os.system("ffplay chunk.wav")</div>
+          <div style="color:var(--mu)">↓ blocks until done</div>
+          <div style="color:var(--yl)">3. os.remove("chunk.wav")</div>
+          <div style="color:var(--mu);font-size:.62rem;margin-top:.4rem">⚠ ~100-300ms overhead per sentence</div>
+        </div>
+      </div>
+      <div class="viz" style="margin:0">
+        <div class="viz-label">path b: PyAudio (test_pyaudio.py) — direct</div>
+        <div style="font-size:.72rem;line-height:1.8">
+          <div style="color:var(--gn)">1. py_audio.open(rate=24000)</div>
+          <div style="color:var(--mu)">↓ direct hardware stream</div>
+          <div style="color:var(--gn)">2. stream.write(chunk.tobytes())</div>
+          <div style="color:var(--mu)">↓ 1024 frames = ~42ms each</div>
+          <div style="color:var(--gn)">3. stream.stop_stream()</div>
+          <div style="color:var(--mu);font-size:.62rem;margin-top:.4rem">✓ no file I/O, interrupt between frames</div>
+        </div>
+      </div>
+    </div>
+    <div class="viz">
+      <div class="viz-label">PyAudio output stream — simulated 1024-sample frames</div>
+      <canvas id="vizOut" height="50"></canvas>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════ STAGE 6: Streaming Architecture ═══════════════════════ -->
+<section class="stage" id="s5">
+  <span class="stage-num">06</span>
+  <div class="stage-inner">
+    <div class="badge">importance 8 / 10 <span class="role-tag role-proc">concurrency</span></div>
+    <h2><span class="hl-mv">Streaming</span> — three-thread pipeline</h2>
+    <p class="desc">
+      <strong>test_pyaudio.py</strong> implements a proper producer-consumer chain with three threads
+      connected by two <strong>queue.Queue</strong> instances. While sentence 2 is being synthesised,
+      sentence 1 is still playing. This is the architecture main.py should adopt.
+    </p>
+    <div class="pills">
+      <span class="pill">threading.Thread × 3</span>
+      <span class="pill">queue.Queue × 2</span>
+      <span class="pill yl">None sentinel = shutdown</span>
+    </div>
+    <div class="stream-diagram">
+      <div class="stream-thread">
+        <span class="thread-label" style="color:var(--yl)">Thread 1</span>
+        <div class="thread-flow">
+          <div class="thread-box" style="border-color:var(--pk)">Gemini / Ollama</div>
+          <span class="thread-arrow">→</span>
+          <div class="thread-box">sentence detect</div>
+          <span class="thread-arrow">→</span>
+          <div class="thread-queue" style="border-color:var(--yl);color:var(--yl)">text_queue</div>
+        </div>
+      </div>
+      <div class="stream-thread">
+        <span class="thread-label" style="color:var(--tp)">Thread 2</span>
+        <div class="thread-flow">
+          <div class="thread-queue" style="border-color:var(--yl);color:var(--yl)">text_queue</div>
+          <span class="thread-arrow">→</span>
+          <div class="thread-box" style="border-color:var(--tp)">Kokoro TTS</div>
+          <span class="thread-arrow">→</span>
+          <div class="thread-queue" style="border-color:var(--gn);color:var(--gn)">audio_queue</div>
+        </div>
+      </div>
+      <div class="stream-thread">
+        <span class="thread-label" style="color:var(--gn)">Thread 3</span>
+        <div class="thread-flow">
+          <div class="thread-queue" style="border-color:var(--gn);color:var(--gn)">audio_queue</div>
+          <span class="thread-arrow">→</span>
+          <div class="thread-box" style="border-color:var(--gn)">PyAudio</div>
+          <span class="thread-arrow">→</span>
+          <div class="thread-box">🔊 Speakers</div>
+        </div>
+      </div>
+    </div>
+    <div class="codeblk">
+      <span class="cm"># test_pyaudio.py — the real streaming architecture</span><br>
+      text_queue = queue.<span class="fn">Queue</span>()<br>
+      audio_queue = queue.<span class="fn">Queue</span>()<br><br>
+      <span class="kw">def</span> <span class="fn">ai_producer</span>():&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="cm"># Thread 1: LLM → text_queue</span><br>
+      &nbsp;&nbsp;<span class="kw">for</span> chunk <span class="kw">in</span> chunk_generator:<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;buffer += chunk<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;<span class="kw">if</span> <span class="fn">is_sentence_end</span>(buffer):<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;text_queue.<span class="fn">put</span>(buffer)<br>
+      &nbsp;&nbsp;text_queue.<span class="fn">put</span>(<span class="num">None</span>) <span class="cm"># sentinel</span><br><br>
+      <span class="kw">def</span> <span class="fn">tts_consumer</span>():&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="cm"># Thread 2: text_queue → audio_queue</span><br>
+      &nbsp;&nbsp;<span class="kw">while</span> <span class="num">True</span>:<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;text = text_queue.<span class="fn">get</span>()<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;<span class="kw">if</span> text <span class="kw">is</span> <span class="num">None</span>: audio_queue.<span class="fn">put</span>(<span class="num">None</span>); <span class="kw">break</span><br>
+      &nbsp;&nbsp;&nbsp;&nbsp;audio_queue.<span class="fn">put</span>(<span class="fn">generate_audio</span>(text))<br><br>
+      <span class="kw">def</span> <span class="fn">playback_consumer</span>(): <span class="cm"># Thread 3: audio_queue → speakers</span><br>
+      &nbsp;&nbsp;stream = py_audio.<span class="fn">open</span>(rate=<span class="num">24000</span>, output=<span class="num">True</span>)<br>
+      &nbsp;&nbsp;<span class="kw">while</span> <span class="num">True</span>:<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;data = audio_queue.<span class="fn">get</span>()<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;<span class="kw">if</span> data <span class="kw">is</span> <span class="num">None</span>: <span class="kw">break</span><br>
+      &nbsp;&nbsp;&nbsp;&nbsp;stream.<span class="fn">write</span>(data.<span class="fn">tobytes</span>())
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════ COMPARISON ═══════════════════════ -->
+<section class="stage" id="sCmp" style="min-height:auto;padding:3rem 2rem">
+  <div class="stage-inner">
+    <h2 style="margin-bottom:1rem"><span class="hl-bl">VirtualJarvis</span> vs <span class="hl-yl">Voice Loop</span></h2>
+    <table class="cmp-table">
+      <thead><tr><th>Feature</th><th>VirtualJarvis</th><th>Voice Loop</th></tr></thead>
+      <tbody>
+        <tr><td class="feat">STT</td><td class="partial">Google Cloud (internet required)</td><td class="has">Moonshine (local, CPU)</td></tr>
+        <tr><td class="feat">VAD</td><td class="partial">Energy threshold (basic)</td><td class="has">Silero VAD (neural)</td></tr>
+        <tr><td class="feat">Turn Detection</td><td class="miss">None</td><td class="has">Smart Turn v3</td></tr>
+        <tr><td class="feat">LLM</td><td class="partial">Ollama remote server</td><td class="has">Gemma 4 E4B (local MLX)</td></tr>
+        <tr><td class="feat">TTS</td><td class="has">Kokoro (same)</td><td class="has">Kokoro (same)</td></tr>
+        <tr><td class="feat">Audio Output</td><td class="partial">ffplay (file) / PyAudio (direct)</td><td class="has">sounddevice OutputStream</td></tr>
+        <tr><td class="feat">Echo Cancellation</td><td class="miss">None</td><td class="has">WebRTC AEC3</td></tr>
+        <tr><td class="feat">Barge-in</td><td class="miss">None</td><td class="has">AEC + VAD interrupt</td></tr>
+        <tr><td class="feat">Conversation History</td><td class="miss">None (main.py)</td><td class="has">Last 10 turns</td></tr>
+        <tr><td class="feat">Memory</td><td class="miss">None</td><td class="has">MEMORY.md (LLM-powered)</td></tr>
+        <tr><td class="feat">Streaming Overlap</td><td class="partial">Sequential (main) / 3-thread (test)</td><td class="has">LLM thread + asyncio TTS</td></tr>
+        <tr><td class="feat">Latency</td><td class="partial">~4–14s</td><td class="has">~2–4s</td></tr>
+        <tr><td class="feat">Offline</td><td class="miss">No (Google STT)</td><td class="has">Yes (fully local)</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ═══════════════════════ NATIVE MODULES ═══════════════════════ -->
+<section class="native">
+  <div class="native-inner">
+    <h2>Standard Library <span class="hl-bl">Foundation</span></h2>
+    <p class="sub">The Python stdlib modules that hold everything together.</p>
+    <div class="mod-grid" id="modGrid"></div>
+  </div>
+</section>
+
+<footer>
+  <p>VirtualJarvis Pipeline Visualisation — <a href="#">VirtualJarvis</a></p>
+</footer>
+
+<!-- ═══════════════════════ JAVASCRIPT ═══════════════════════ -->
+<script>
+(function(){
+  const {animate,stagger,inView} = Motion;
+
+  /* ── Hero waveform ── */
+  const heroC=document.getElementById('heroWave'),heroCtx=heroC.getContext('2d');
+  let hp=0;
+  function drawHero(){
+    const w=heroC.width,h=heroC.height;heroCtx.clearRect(0,0,w,h);hp+=0.02;
+    for(let l=0;l<3;l++){
+      heroCtx.beginPath();const a=0.12+l*0.1,amp=10+l*5,freq=0.007+l*0.003,sp=hp*(1+l*0.35);
+      heroCtx.strokeStyle=`rgba(137,180,250,${a})`;heroCtx.lineWidth=1.5;
+      for(let x=0;x<w;x++){const y=h/2+Math.sin(x*freq+sp)*amp*Math.sin(x*0.002+sp*0.3);x===0?heroCtx.moveTo(x,y):heroCtx.lineTo(x,y)}
+      heroCtx.stroke();
+    }
+    requestAnimationFrame(drawHero);
+  }
+  drawHero();
+
+  /* ── Hero entrance ── */
+  animate('.hero-tag',{opacity:[0,.5],y:[12,0]},{duration:.8,delay:.2});
+  animate('.hero h1',{opacity:[0,1],y:[24,0]},{duration:.9,delay:.4});
+  animate('.hero-sub',{opacity:[0,1],y:[12,0]},{duration:.7,delay:.7});
+  animate('.hero-vs',{opacity:[0,1],y:[10,0]},{duration:.6,delay:.9});
+  animate('.scroll-cue',{opacity:[0,1]},{duration:.6,delay:1.2});
+
+  /* ── Pipeline bar ── */
+  const nodes=document.querySelectorAll('.pn'),lines=document.querySelectorAll('.pn-line');
+  function setPipe(idx){nodes.forEach((n,i)=>n.classList.toggle('on',i<=idx));lines.forEach((l,i)=>l.classList.toggle('on',i<idx))}
+  nodes.forEach((n,i)=>n.addEventListener('click',()=>{const el=document.getElementById('s'+i);if(el)el.scrollIntoView({behavior:'smooth'})}));
+
+  /* ── Stage scroll ── */
+  const stageIds=['s0','s1','s2','s3','s4','s5'];
+  stageIds.forEach((id,i)=>{
+    const el=document.getElementById(id);if(!el)return;
+    inView(el,()=>setPipe(i),{amount:.3});
+    inView(el,()=>{animate(el.querySelectorAll('.badge,h2,.imp,.desc,.pills,.codeblk,.viz,.stream-diagram'),{opacity:[0,1],y:[20,0]},{duration:.5,delay:stagger(.08)})},{amount:.15});
+  });
+
+  /* ── SR energy viz ── */
+  const srC=document.getElementById('vizSR'),srCtx=srC.getContext('2d');
+  const eFill=document.getElementById('energyFill'),eVal=document.getElementById('energyVal');
+  let srp=0;
+  function drawSR(){
+    const w=srC.width||srC.getBoundingClientRect().width,h=80;srCtx.clearRect(0,0,w,h);srp+=0.04;
+    const speechPhase=Math.sin(srp*0.3);
+    const isSpeaking=speechPhase>0;
+    for(let x=0;x<w;x++){
+      const env=isSpeaking?0.7+Math.sin(srp+x*0.05)*0.3:0.05+Math.random()*0.08;
+      const amp=env*h*0.4;
+      const y=h/2+Math.sin(x*0.08+srp*2)*amp*(Math.sin(x*0.01+srp)*0.5+0.5);
+      srCtx.fillStyle=isSpeaking?`rgba(249,226,175,${env*0.6})`:`rgba(108,112,134,${env*0.5})`;
+      srCtx.fillRect(x,h/2-amp/2,1.5,amp);
+    }
+    // threshold line
+    srCtx.strokeStyle='rgba(243,139,168,.4)';srCtx.lineWidth=1;srCtx.setLineDash([4,4]);
+    srCtx.beginPath();srCtx.moveTo(0,h*0.3);srCtx.lineTo(w,h*0.3);srCtx.stroke();
+    srCtx.setLineDash([]);
+    srCtx.fillStyle='rgba(243,139,168,.4)';srCtx.font='9px JetBrains Mono';
+    srCtx.fillText('threshold',w-60,h*0.3-4);
+    // energy meter
+    const e=isSpeaking?0.3+Math.abs(Math.sin(srp*3))*0.7:0.02+Math.random()*0.06;
+    eFill.style.width=(e*100)+'%';
+    eFill.style.background=e>0.25?'var(--gn)':'var(--mu)';
+    eVal.textContent=e>0.25?e.toFixed(2)+' ✓ SPEECH':'calibrating...';
+    eVal.style.color=e>0.25?'var(--gn)':'var(--mu)';
+    requestAnimationFrame(drawSR);
+  }
+  drawSR();
+
+  /* ── Cloud pulse animation ── */
+  function pulseCloud(){
+    const p1=document.getElementById('cloudPulse'),p2=document.getElementById('cloudPulse2');
+    if(!p1||!p2)return;
+    p1.animate([{left:'-20px'},{left:'100%'}],{duration:1200,iterations:Infinity});
+    p2.animate([{left:'-20px'},{left:'100%'}],{duration:1200,delay:600,iterations:Infinity});
+  }
+  pulseCloud();
+
+  /* ── LLM token stream ── */
+  const tokenEl=document.getElementById('tokenStream');
+  const sentences=["Sure, I can help you with that.","Linear algebra is the study of vectors and matrices.","It's fundamental to machine learning.","Let me explain the basics."];
+  let si=0;
+  function streamTokens(){
+    tokenEl.innerHTML='';const words=sentences[si%sentences.length].split(' ');let wi=0;
+    const iv=setInterval(()=>{
+      if(wi<words.length){
+        const tok=document.createElement('span');tok.className='pill';tok.style.opacity='0';
+        tok.style.transform='translateY(6px)';tok.textContent=(wi===0?'':' ')+words[wi];
+        tokenEl.appendChild(tok);
+        requestAnimationFrame(()=>{tok.style.transition='all .25s ease';tok.style.opacity='1';tok.style.transform='translateY(0)'});
+        wi++;
+      }else{
+        clearInterval(iv);
+        const dot=document.createElement('span');dot.className='pill gn';dot.style.opacity='0';
+        dot.textContent=' ← response complete';tokenEl.appendChild(dot);
+        requestAnimationFrame(()=>{dot.style.transition='all .3s ease';dot.style.opacity='1'});
+        setTimeout(()=>{si++;streamTokens()},2500);
+      }
+    },90);
+  }
+  streamTokens();
+
+  /* ── TTS waveform ── */
+  const ttsC=document.getElementById('vizTTS'),ttsCtx=ttsC.getContext('2d');
+  let tp=0;
+  function drawTTS(){
+    const w=ttsC.width||ttsC.getBoundingClientRect().width,h=60;ttsCtx.clearRect(0,0,w,h);tp+=0.035;
+    const prog=(Math.sin(tp*0.25)*0.5+0.5);const px=prog*w;
+    ttsCtx.beginPath();ttsCtx.strokeStyle='rgba(148,226,213,.45)';ttsCtx.lineWidth=1.5;
+    for(let x=0;x<w;x++){
+      const env=x<px?1:0.12;
+      const y=h/2+Math.sin(x*0.05+tp)*20*env*Math.sin(x*0.013+tp*0.5);
+      x===0?ttsCtx.moveTo(x,y):ttsCtx.lineTo(x,y);
+    }
+    ttsCtx.stroke();
+    ttsCtx.fillStyle='rgba(148,226,213,.6)';ttsCtx.fillRect(px-1,0,2,h);
+    ttsCtx.fillStyle='rgba(148,226,213,.35)';ttsCtx.font='9px JetBrains Mono';
+    ttsCtx.fillText('KPipeline generating...',Math.max(4,px-100),12);
+    requestAnimationFrame(drawTTS);
+  }
+  drawTTS();
+
+  /* ── Output waveform (PyAudio frames) ── */
+  const outC=document.getElementById('vizOut'),outCtx=outC.getContext('2d');
+  let op=0;
+  function drawOut(){
+    const w=outC.width||outC.getBoundingClientRect().width,h=50;outCtx.clearRect(0,0,w,h);op+=0.03;
+    const frameW=w/8;
+    outCtx.strokeStyle='rgba(166,227,161,.06)';outCtx.lineWidth=1;
+    for(let i=1;i<8;i++){outCtx.beginPath();outCtx.moveTo(i*frameW,0);outCtx.lineTo(i*frameW,h);outCtx.stroke()}
+    outCtx.beginPath();outCtx.strokeStyle='rgba(166,227,161,.4)';outCtx.lineWidth=1.5;
+    for(let x=0;x<w;x++){const env=Math.sin(x/w*Math.PI)*0.8;const y=h/2+Math.sin(x*0.06+op)*22*env*Math.sin(x*0.015+op*0.4);x===0?outCtx.moveTo(x,y):outCtx.lineTo(x,y)}
+    outCtx.stroke();
+    const hx=((op*35)%w);outCtx.fillStyle='rgba(166,227,161,.5)';outCtx.fillRect(hx,0,2,h);
+    outCtx.fillStyle='rgba(166,227,161,.15)';outCtx.font='8px JetBrains Mono';
+    for(let i=0;i<8;i++)outCtx.fillText('1024',i*frameW+3,h-3);
+    requestAnimationFrame(drawOut);
+  }
+  drawOut();
+
+  /* ── Native modules ── */
+  const modules=[
+    {name:'os',imp:7,role:'Environment vars, system calls (ffplay), file deletion',code:'os.getenv() / os.system()'},
+    {name:'threading',imp:8,role:'Producer-consumer threads in streaming mode',code:'Thread(target=fn).start()'},
+    {name:'queue',imp:8,role:'Thread-safe queues connecting pipeline stages',code:'Queue() / .put() / .get()'},
+    {name:'sys',imp:5,role:'CLI argument parsing in standalone modules',code:'sys.argv[1]'},
+    {name:'random',imp:4,role:'Random filename generation for WAV temp files',code:'random.randint(1,10)'},
+    {name:'time',imp:3,role:'Sleep between playback and listening restart',code:'time.sleep(1)'},
+  ];
+  const grid=document.getElementById('modGrid');
+  modules.forEach(m=>{
+    const card=document.createElement('div');card.className='mod-card';
+    card.innerHTML=`<h3>${m.name} <span style="font-size:.68rem;color:var(--bl);font-weight:400;margin-left:.3rem;">${m.imp}/10</span></h3><div class="role">${m.role}</div><code>${m.code}</code>`;
+    grid.appendChild(card);
+  });
+  inView('#modGrid',()=>{animate(grid.querySelectorAll('.mod-card'),{opacity:[0,1],y:[16,0]},{duration:.4,delay:stagger(.05)})},{amount:.15});
+
+})();
+</script>
+</body>
+</html>

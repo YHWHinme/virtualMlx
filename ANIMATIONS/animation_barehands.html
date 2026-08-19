@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>barehands — Request Pipeline</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/@motionone/dom@10.18.0/dist/motion-umd.dev.js"></script>
+  <style>
+    *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+    :root{
+      --bg:#040a0d;--sf:#0a1519;--bd:#15282e;
+      --tx:#dff3ee;--mu:#5e8a82;
+      --tl:#6fe3c9;--gd:#d4a855;--rs:#e8637a;--sk:#48b8a0;--ic:#5cc8f0;--wf:#a78bfa;
+      --mono:'JetBrains Mono',monospace;--sans:'Outfit',sans-serif;
+    }
+    html{scroll-behavior:smooth}
+    body{background:var(--bg);color:var(--tx);font-family:var(--mono);font-size:14px;line-height:1.7;overflow-x:hidden}
+    ::selection{background:var(--tl);color:var(--bg)}
+
+    /* ── HERO ── */
+    .hero{
+      height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;
+      position:relative;overflow:hidden;
+      background:radial-gradient(ellipse at 50% 40%,#0d262a 0%,var(--bg) 70%);
+    }
+    .hero::before{content:'';position:absolute;inset:0;
+      background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(111,227,201,.008) 3px,rgba(111,227,201,.008) 4px);
+      pointer-events:none}
+    .hero-tag{font-size:.68rem;letter-spacing:.35em;text-transform:uppercase;color:var(--tl);opacity:.5}
+    .hero h1{
+      font-family:var(--sans);font-size:clamp(2.5rem,6vw,5rem);font-weight:700;letter-spacing:-.03em;
+      text-align:center;
+      background:linear-gradient(135deg,var(--tl),#fff 50%,var(--gd));
+      -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-top:.4rem;
+    }
+    .hero-sub{color:var(--mu);font-size:.88rem;margin-top:.7rem;text-align:center;max-width:500px}
+    .hero-zero{
+      margin-top:1.6rem;padding:.45rem 1rem;border:1px solid var(--bd);border-radius:6px;
+      font-size:.66rem;color:var(--mu);background:var(--sf);
+    }
+    .hero-zero strong{color:var(--tl)}
+    #heroHand{width:min(88%,400px);height:200px;margin-top:1.4rem}
+    .scroll-cue{position:absolute;bottom:2rem;display:flex;flex-direction:column;align-items:center;gap:.4rem;color:var(--mu);font-size:.62rem;letter-spacing:.15em}
+    .scroll-cue .arr{width:16px;height:16px;border-right:1.5px solid var(--tl);border-bottom:1.5px solid var(--tl);transform:rotate(45deg);animation:bob 2.2s ease-in-out infinite}
+    @keyframes bob{0%,100%{transform:rotate(45deg) translate(0,0)}50%{transform:rotate(45deg) translate(4px,4px)}}
+
+    /* ── PIPELINE BAR ── */
+    .pipeline{position:sticky;top:0;z-index:50;background:rgba(4,10,13,.93);backdrop-filter:blur(14px);border-bottom:1px solid var(--bd);padding:.8rem 1.5rem}
+    .pipe-row{display:flex;align-items:center;justify-content:center;gap:0;max-width:960px;margin:0 auto}
+    .pn{
+      display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50%;
+      border:2px solid var(--bd);background:var(--sf);font-size:.55rem;font-weight:700;color:var(--mu);
+      flex-shrink:0;position:relative;transition:all .35s ease;cursor:pointer;
+    }
+    .pn.on{border-color:var(--tl);color:var(--tl);box-shadow:0 0 12px rgba(111,227,201,.25)}
+    .pn.gold.on{border-color:var(--gd);color:var(--gd);box-shadow:0 0 12px rgba(212,168,85,.3)}
+    .pn-line{width:32px;height:2px;background:var(--bd);flex-shrink:0;position:relative;overflow:hidden}
+    .pn-line::after{content:'';position:absolute;inset:0;background:var(--tl);transform:scaleX(0);transform-origin:left;transition:transform .5s ease}
+    .pn-line.on::after{transform:scaleX(1)}
+    .pn-tip{position:absolute;top:44px;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:.54rem;color:var(--mu);opacity:0;transition:opacity .2s;pointer-events:none}
+    .pn:hover .pn-tip{opacity:1}
+
+    /* ── STAGES ── */
+    .stage{min-height:88vh;display:flex;align-items:center;padding:5rem 2rem;position:relative}
+    .stage-inner{max-width:900px;margin:0 auto;width:100%}
+    .stage-num{font-size:5.5rem;font-weight:700;font-family:var(--sans);line-height:1;opacity:.04;position:absolute;top:3.5rem;right:2rem}
+    .badge{display:inline-block;padding:.12rem .6rem;border:1px solid var(--bd);border-radius:3px;font-size:.58rem;letter-spacing:.18em;text-transform:uppercase;color:var(--mu);margin-bottom:.7rem}
+    .stage h2{font-family:var(--sans);font-size:clamp(1.5rem,3.2vw,2.3rem);font-weight:700;line-height:1.2;margin-bottom:.35rem}
+    .hl-tl{color:var(--tl)}.hl-gd{color:var(--gd)}.hl-rs{color:var(--rs)}.hl-sk{color:var(--sk)}.hl-ic{color:var(--ic)}.hl-wf{color:var(--wf)}
+    .stage .imp{font-size:.82rem;font-weight:600;margin-bottom:1rem}
+    .stage .desc{color:var(--mu);max-width:580px;margin-bottom:1.4rem;font-size:.88rem}
+    .stage .desc strong{color:var(--tx);font-weight:500}
+    .role-tag{display:inline-block;padding:.1rem .45rem;border-radius:3px;font-size:.6rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;margin-left:.4rem;vertical-align:middle}
+    .role-cam{background:rgba(111,227,201,.08);color:var(--tl);border:1px solid rgba(111,227,201,.18)}
+    .role-gate{background:rgba(232,99,122,.08);color:var(--rs);border:1px solid rgba(232,99,122,.18)}
+    .role-proc{background:rgba(92,200,240,.08);color:var(--ic);border:1px solid rgba(92,200,240,.18)}
+    .role-ai{background:rgba(212,168,85,.08);color:var(--gd);border:1px solid rgba(212,168,85,.18)}
+
+    /* ── CODE BLOCK ── */
+    .codeblk{background:#081216;border:1px solid var(--bd);border-radius:6px;padding:1.1rem 1.3rem;font-size:.76rem;line-height:1.85;overflow-x:auto;margin:1rem 0;max-width:580px}
+    .kw{color:var(--wf)}.fn{color:var(--tl)}.str{color:var(--sk)}.cm{color:var(--mu);font-style:italic}.num{color:var(--gd)}.op{color:var(--rs)}
+
+    /* ── VIZ ── */
+    .viz{margin:1.6rem 0;padding:1.4rem;background:var(--sf);border:1px solid var(--bd);border-radius:8px;position:relative}
+    .viz-label{font-size:.58rem;letter-spacing:.22em;text-transform:uppercase;color:var(--mu);margin-bottom:.9rem}
+    .viz canvas{display:block;width:100%;border-radius:4px}
+
+    /* ── PILLS ── */
+    .pills{display:flex;flex-wrap:wrap;gap:.45rem;margin:.9rem 0}
+    .pill{padding:.28rem .65rem;background:rgba(111,227,201,.04);border:1px solid rgba(111,227,201,.12);border-radius:3px;font-size:.72rem;color:var(--tl);font-weight:500}
+    .pill.gd{background:rgba(212,168,85,.04);border-color:rgba(212,168,85,.12);color:var(--gd)}
+    .pill.rs{background:rgba(232,99,122,.04);border-color:rgba(232,99,122,.12);color:var(--rs)}
+    .pill.ic{background:rgba(92,200,240,.04);border-color:rgba(92,200,240,.12);color:var(--ic)}
+
+    /* ── HAND VIZ ── */
+    .hand-canvas-wrap{position:relative}
+    #handCanvas{display:block;width:100%;height:240px;border-radius:6px;background:#060e12}
+
+    /* ── PINCH METER ── */
+    .pinch-row{margin-top:1rem;display:flex;align-items:center;gap:.7rem}
+    .pinch-label{font-size:.65rem;color:var(--mu);min-width:60px}
+    .pinch-track{flex:1;height:8px;background:var(--bd);border-radius:4px;overflow:hidden}
+    .pinch-fill{height:100%;border-radius:4px;transition:width .15s ease,background .3s;width:0}
+    .pinch-val{font-size:.72rem;font-weight:600;min-width:90px;text-align:right;transition:color .2s}
+
+    /* ── HEARTBEAT ── */
+    .hb-diagram{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin:1rem 0;font-size:.72rem}
+    .hb-box{padding:.45rem .8rem;border:1px solid var(--bd);border-radius:4px;background:var(--sf);text-align:center;min-width:80px}
+    .hb-arrow{color:var(--tl);font-size:1rem;opacity:.4;flex-shrink:0}
+
+    /* ── COMMAND TABLE ── */
+    .cmd-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:.6rem;margin:1rem 0}
+    .cmd-card{padding:.6rem .8rem;background:var(--sf);border:1px solid var(--bd);border-radius:6px;transition:border-color .3s}
+    .cmd-card:hover{border-color:var(--gd)}
+    .cmd-card .cmd-name{font-size:.72rem;font-weight:700;color:var(--gd);margin-bottom:.2rem;font-family:var(--mono)}
+    .cmd-card .cmd-desc{font-size:.62rem;color:var(--mu)}
+
+    /* ── SPLIT DIAGRAM ── */
+    .split{display:grid;grid-template-columns:1fr auto 1fr;gap:1rem;align-items:start;margin:1.2rem 0}
+    .split-col{padding:1rem;background:var(--sf);border:1px solid var(--bd);border-radius:8px}
+    .split-mid{display:flex;flex-direction:column;align-items:center;gap:.5rem;padding-top:2rem}
+    .split-mid .s-arrow{color:var(--tl);font-size:.9rem;opacity:.4}
+    .split-mid .s-label{font-size:.54rem;color:var(--mu);writing-mode:vertical-lr;letter-spacing:.1em;text-transform:uppercase}
+    @media(max-width:700px){.split{grid-template-columns:1fr}.split-mid{flex-direction:row;padding:0}.split-mid .s-label{writing-mode:horizontal-tb}}
+
+    /* ── FOOTER ── */
+    footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--bd);color:var(--mu);font-size:.72rem}
+    footer a{color:var(--tl);text-decoration:none}
+
+    @media(max-width:700px){
+      .pn-line{width:14px}.pn{width:28px;height:28px;font-size:.45rem}
+      .stage{padding:3rem 1rem}.stage-num{font-size:3.5rem;right:1rem}
+      .codeblk{font-size:.68rem;padding:.8rem 1rem}
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══ HERO ═══ -->
+<section class="hero">
+  <span class="hero-tag">hand-tracked glass interface · webcam · zero dependencies</span>
+  <h1>barehands</h1>
+  <p class="hero-sub">How your webcam becomes a hand-tracked interface — from MediaPipe landmarks through gesture gates, physics, and the AI command channel. Two files, zero dependencies.</p>
+  <div class="hero-zero"><strong>server.py</strong> (stdlib Python) + <strong>stage.html</strong> (MediaPipe + three.js) — nothing else</div>
+  <canvas id="heroHand" width="400" height="200"></canvas>
+  <div class="scroll-cue"><span>SCROLL TO EXPLORE</span><div class="arr"></div></div>
+</section>
+
+<!-- ═══ PIPELINE BAR ═══ -->
+<nav class="pipeline">
+  <div class="pipe-row">
+    <div class="pn on" data-stage="0">CAM<span class="pn-tip">webcam + MediaPipe</span></div>
+    <div class="pn-line"></div>
+    <div class="pn" data-stage="1">PIN<span class="pn-tip">pinch gate</span></div>
+    <div class="pn-line"></div>
+    <div class="pn" data-stage="2">GES<span class="pn-tip">gesture engine</span></div>
+    <div class="pn-line"></div>
+    <div class="pn" data-stage="3">PHY<span class="pn-tip">physics + render</span></div>
+    <div class="pn-line"></div>
+    <div class="pn" data-stage="4">SRV<span class="pn-tip">server heartbeat</span></div>
+    <div class="pn-line"></div>
+    <div class="pn gold" data-stage="5">AI<span class="pn-tip">AI command channel</span></div>
+    <div class="pn-line"></div>
+    <div class="pn" data-stage="6">3D<span class="pn-tip">three.js models</span></div>
+  </div>
+</nav>
+
+<!-- ═══ STAGE 1: Camera + MediaPipe ═══ -->
+<section class="stage" id="s0">
+  <span class="stage-num">01</span>
+  <div class="stage-inner">
+    <div class="badge">importance 10 / 10 <span class="role-tag role-cam">input</span></div>
+    <h2><span class="hl-tl">Webcam + MediaPipe</span> — 21 landmarks per hand</h2>
+    <p class="imp hl-tl">The entire input pipeline. No controllers, no headset — just a camera watching your hands.</p>
+    <p class="desc">
+      Google's <strong>MediaPipe HandLandmarker</strong> runs in the browser and returns
+      <strong>21 3D landmarks per hand</strong> at ~30Hz. The code extracts cursor position
+      (index tip + thumb tip midpoint), hand <strong>span</strong> (wrist→middle-knuckle, the hand's
+      own yardstick), and per-finger <strong>arch ratios</strong> that drive every gesture gate.
+    </p>
+    <div class="pills">
+      <span class="pill">HandLandmarker</span>
+      <span class="pill">FilesetResolver</span>
+      <span class="pill">detectForVideo(cam, now)</span>
+      <span class="pill ic">landmarks[0..20]</span>
+    </div>
+    <div class="viz">
+      <div class="viz-label">live hand skeleton — 21 landmarks + cursor</div>
+      <div class="hand-canvas-wrap">
+        <canvas id="handCanvas"></canvas>
+      </div>
+    </div>
+    <div class="codeblk">
+      <span class="cm">// camera + MediaPipe init</span><br>
+      <span class="kw">import</span> { HandLandmarker, FilesetResolver } <span class="kw">from</span><br>
+      &nbsp;&nbsp;<span class="str">"@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs"</span>;<br><br>
+      <span class="cm">// each frame:</span><br>
+      <span class="kw">const</span> res = landmarker.<span class="fn">detectForVideo</span>(cam, now);<br>
+      <span class="kw">const</span> tip = <span class="fn">toScreen</span>(lms[<span class="num">8</span>]);&nbsp; <span class="cm">// index fingertip</span><br>
+      <span class="kw">const</span> thumb = <span class="fn">toScreen</span>(lms[<span class="num">4</span>]); <span class="cm">// thumb tip</span><br>
+      <span class="kw">const</span> span = Math.<span class="fn">hypot</span>(lms[<span class="num">0</span>].x - lms[<span class="num">9</span>].x, lms[<span class="num">0</span>].y - lms[<span class="num">9</span>].y);<br>
+      <span class="cm">// span = the hand's own ruler — all gates use ratios against it</span>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ STAGE 2: Pinch Gate ═══ -->
+<section class="stage" id="s1">
+  <span class="stage-num">02</span>
+  <div class="stage-inner">
+    <div class="badge">importance 10 / 10 <span class="role-tag role-gate">gesture gate</span></div>
+    <h2><span class="hl-rs">The Pinch</span> — THE CONTRAST LAW</h2>
+    <p class="imp hl-rs">The primary interaction. Must distinguish a deliberate OK-sign from a closed fist.</p>
+    <p class="desc">
+      A fist also brings the thumb to the index tip — raw gap distance can't tell them apart.
+      The insight: in a correct pinch, the <strong>index curls IN</strong> to the thumb while the
+      <strong>back three fingers ARCH OUT</strong> past the knuckle circle. In a fist, all fingers fold in.
+      The <strong>contrast</strong> (backMean − f8) separates every correct pinch from every impostor.
+    </p>
+    <div class="pills">
+      <span class="pill rs">contrast = backMean − f8</span>
+      <span class="pill rs">threshold ≥ 0.18</span>
+      <span class="pill rs">backMean floor ≥ 1.30</span>
+      <span class="pill ic">aspect &lt; 2.0 → profile regime</span>
+    </div>
+    <div class="viz">
+      <div class="viz-label">contrast law — pinch vs fist discrimination</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+        <div style="text-align:center">
+          <canvas id="pinchOK" width="160" height="120" style="width:100%;border-radius:4px;background:#060e12"></canvas>
+          <div style="font-size:.65rem;color:var(--sk);margin-top:.3rem">✓ OK-SIGN PINCH</div>
+          <div style="font-size:.6rem;color:var(--mu)">contrast: <span class="hl-tl">0.42</span></div>
+        </div>
+        <div style="text-align:center">
+          <canvas id="pinchFist" width="160" height="120" style="width:100%;border-radius:4px;background:#060e12"></canvas>
+          <div style="font-size:.65rem;color:var(--rs);margin-top:.3rem">✗ CLOSED FIST</div>
+          <div style="font-size:.6rem;color:var(--mu)">contrast: <span class="hl-rs">0.04</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="pinch-row">
+      <span class="pinch-label">Contrast</span>
+      <div class="pinch-track"><div class="pinch-fill" id="pinchFill"></div></div>
+      <span class="pinch-val" id="pinchVal">0.00</span>
+    </div>
+    <div class="codeblk">
+      <span class="cm">// THE CONTRAST LAW (fitted from 6 correct / 6 impostor)</span><br>
+      <span class="kw">const</span> f8v = <span class="fn">fR</span>(<span class="num">8</span>, <span class="num">5</span>);  <span class="cm">// index arch</span><br>
+      <span class="kw">const</span> backMean = (<span class="fn">fR</span>(<span class="num">12</span>,<span class="num">9</span>) + <span class="fn">fR</span>(<span class="num">16</span>,<span class="num">13</span>) + <span class="fn">fR</span>(<span class="num">20</span>,<span class="num">17</span>)) / <span class="num">3</span>;<br><br>
+      <span class="cm">// OK-sign signature: index curls in, back three arch out</span><br>
+      <span class="kw">const</span> contrast = backMean - f8v;<br>
+      <span class="kw">const</span> isPinch = contrast >= <span class="num">0.18</span> && backMean >= <span class="num">1.30</span>;<br><br>
+      <span class="cm">// two orientation regimes (frontal vs profile palm)</span><br>
+      <span class="kw">if</span> (aspect < <span class="num">2.0</span>) <span class="cm">// profile: judge by thumb distance</span><br>
+      &nbsp;&nbsp;isPinch ||= tRel > <span class="num">0.95</span>;
+    </div>
+  </div>
+</section>
+
+<!-- ═══ STAGE 3: Gesture Engine ═══ -->
+<section class="stage" id="s2">
+  <span class="stage-num">03</span>
+  <div class="stage-inner">
+    <div class="badge">importance 9 / 10 <span class="role-tag role-gate">gesture engine</span></div>
+    <h2><span class="hl-rs">Gesture Gates</span> — shape ratios, not pixels</h2>
+    <p class="desc">
+      Every gesture gate measures <strong>hand shape as ratios against the hand's own span</strong>,
+      not screen pixels. This is why they work at any camera distance. Three major gestures
+      beyond the pinch:
+    </p>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.8rem;margin:1.2rem 0">
+      <div class="viz" style="margin:0;padding:1rem">
+        <div style="font-size:.72rem;font-weight:700;color:var(--tl);margin-bottom:.4rem">THE CLAW</div>
+        <div style="font-size:.65rem;color:var(--mu);line-height:1.6">
+          Flash open → claw → aim → hold <strong style="color:var(--tx)">2 seconds</strong> → snap shut<br><br>
+          Gates: mouth ratio &gt; 0.80, per-finger curl ceilings, pinky-out splay, aspect rail
+        </div>
+      </div>
+      <div class="viz" style="margin:0;padding:1rem">
+        <div style="font-size:.72rem;font-weight:700;color:var(--tl);margin-bottom:.4rem">THE CLAP</div>
+        <div style="font-size:.65rem;color:var(--mu);line-height:1.6">
+          Palms together, fingers up → <strong style="color:var(--tx)">sweep board clean</strong><br><br>
+          Gates: wrist proximity, handUp &gt; 0.85, was-apart memory
+        </div>
+      </div>
+      <div class="viz" style="margin:0;padding:1rem">
+        <div style="font-size:.72rem;font-weight:700;color:var(--tl);margin-bottom:.4rem">THE THROW</div>
+        <div style="font-size:.65rem;color:var(--mu);line-height:1.6">
+          Fling a card across the screen → <strong style="color:var(--tx)">velocity carry</strong><br><br>
+          Gate: peak velocity &gt; 1300px/s (one of few pixel-based gates)
+        </div>
+      </div>
+    </div>
+    <div class="codeblk">
+      <span class="cm">// per-finger arch ratio — distance-proof</span><br>
+      <span class="kw">const</span> <span class="fn">fR</span> = (t, m) => {<br>
+      &nbsp;&nbsp;<span class="kw">const</span> td = Math.<span class="fn">hypot</span>(lms[t].x - W0.x, lms[t].y - W0.y);<br>
+      &nbsp;&nbsp;<span class="kw">const</span> md = Math.<span class="fn">hypot</span>(lms[m].x - W0.x, lms[m].y - W0.y);<br>
+      &nbsp;&nbsp;<span class="kw">return</span> md > <span class="num">0</span> ? td / md : <span class="num">9</span>;<br>
+      };<br>
+      <span class="cm">// fR(8,5)=1.6 → finger extended. fR(8,5)=0.8 → folded in.</span><br>
+      <span class="cm">// Works at any distance because span cancels out.</span>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ STAGE 4: Physics + Render ═══ -->
+<section class="stage" id="s3">
+  <span class="stage-num">04</span>
+  <div class="stage-inner">
+    <div class="badge">importance 9 / 10 <span class="role-tag role-proc">scene</span></div>
+    <h2><span class="hl-ic">Physics + Render</span> — glass cards in motion</h2>
+    <p class="desc">
+      Every frame: <strong>physics(dt)</strong> updates positions and velocities,
+      <strong>renderModels()</strong> draws 3D holograms, <strong>renderRings()</strong> draws the
+      assistant ring, and <strong>pushState()</strong> streams the scene to the server. The
+      <code>items[]</code> array is the scene's source of truth — cards, panels, images, models, orbs.
+    </p>
+    <div class="pills">
+      <span class="pill ic">items[]</span>
+      <span class="pill ic">physics(dt)</span>
+      <span class="pill ic">renderModels()</span>
+      <span class="pill ic">renderRings()</span>
+      <span class="pill ic">pushState(now)</span>
+    </div>
+    <div class="viz">
+      <div class="viz-label">main loop — every requestAnimationFrame</div>
+      <canvas id="physCanvas" height="70"></canvas>
+    </div>
+    <div class="codeblk">
+      <span class="cm">// the main loop</span><br>
+      <span class="kw">function</span> <span class="fn">frame</span>(now) {<br>
+      &nbsp;&nbsp;<span class="kw">if</span> (cam.currentTime !== lastVideoTs) {<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;<span class="kw">const</span> res = landmarker.<span class="fn">detectForVideo</span>(cam, now);<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;<span class="cm">// → landmarks → cursors → gesture gates</span><br>
+      &nbsp;&nbsp;}<br>
+      &nbsp;&nbsp;<span class="fn">physics</span>(dt);&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <span class="cm">// velocity, friction, bounds</span><br>
+      &nbsp;&nbsp;<span class="fn">renderModels</span>();&nbsp;&nbsp; <span class="cm">// three.js 3D scenes</span><br>
+      &nbsp;&nbsp;<span class="fn">renderRings</span>();&nbsp;&nbsp;&nbsp; <span class="cm">// assistant ring canvas</span><br>
+      &nbsp;&nbsp;<span class="fn">pushState</span>(now);&nbsp;&nbsp; <span class="cm">// stream to server ~45Hz</span><br>
+      &nbsp;&nbsp;<span class="fn">requestAnimationFrame</span>(frame);<br>
+      }
+    </div>
+  </div>
+</section>
+
+<!-- ═══ STAGE 5: Server Heartbeat ═══ -->
+<section class="stage" id="s4">
+  <span class="stage-num">05</span>
+  <div class="stage-inner">
+    <div class="badge">importance 10 / 10 <span class="role-tag role-proc">server</span></div>
+    <h2><span class="hl-sk">Server</span> — state store + command queue</h2>
+    <p class="imp hl-sk">Two in-memory variables. The heartbeat IS the command channel.</p>
+    <p class="desc">
+      <strong>server.py</strong> is stdlib-only Python — no pip install. It holds
+      <code>_STATE</code> (the tracker's last scene) and <code>_CMDS</code> (queued AI commands).
+      When the tracker POSTs its heartbeat, the server returns up to 8 queued commands in the response.
+      The render page GETs the same state to mirror the scene.
+    </p>
+    <div class="pills">
+      <span class="pill">ThreadingHTTPServer</span>
+      <span class="pill">_STATE (bytes)</span>
+      <span class="pill">_CMDS (list)</span>
+      <span class="pill gd">action allowlist (13 verbs)</span>
+    </div>
+    <div class="viz">
+      <div class="viz-label">the heartbeat cycle — POST /state ↔ commands in response</div>
+      <div class="hb-diagram">
+        <div class="hb-box" style="border-color:var(--tl)">
+          <div style="font-size:.6rem;color:var(--mu)">TRACKER</div>
+          <div style="color:var(--tl);font-size:.78rem">POST /state</div>
+          <div style="font-size:.55rem;color:var(--mu)">scene JSON</div>
+        </div>
+        <span class="hb-arrow">→</span>
+        <div class="hb-box" style="border-color:var(--gd)">
+          <div style="font-size:.6rem;color:var(--mu)">SERVER</div>
+          <div style="color:var(--gd);font-size:.78rem">_STATE = body</div>
+          <div style="font-size:.55rem;color:var(--mu)">store + drain _CMDS</div>
+        </div>
+        <span class="hb-arrow">→</span>
+        <div class="hb-box" style="border-color:var(--tl)">
+          <div style="font-size:.6rem;color:var(--mu)">RESPONSE</div>
+          <div style="color:var(--tl);font-size:.78rem">200 + cmds[]</div>
+          <div style="font-size:.55rem;color:var(--mu)">≤ 8 commands</div>
+        </div>
+        <span class="hb-arrow">→</span>
+        <div class="hb-box" style="border-color:var(--ic)">
+          <div style="font-size:.6rem;color:var(--mu)">TRACKER</div>
+          <div style="color:var(--ic);font-size:.78rem">applyCmds()</div>
+          <div style="font-size:.55rem;color:var(--mu)">materialize on board</div>
+        </div>
+      </div>
+    </div>
+    <div class="split">
+      <div class="split-col">
+        <div style="font-size:.72rem;font-weight:700;color:var(--tl);margin-bottom:.5rem">Tracker Page</div>
+        <div style="font-size:.68rem;color:var(--mu);line-height:1.7">
+          Owns the camera + MediaPipe.<br>
+          Runs gesture detection + physics.<br>
+          POSTs scene to server at ~45Hz.<br>
+          Receives + applies AI commands.
+        </div>
+      </div>
+      <div class="split-mid">
+        <span class="s-arrow">⟷</span>
+        <span class="s-label">localhost HTTP</span>
+        <span class="s-arrow">⟷</span>
+      </div>
+      <div class="split-col">
+        <div style="font-size:.72rem;font-weight:700;color:var(--ic);margin-bottom:.5rem">Render Page (?role=render)</div>
+        <div style="font-size:.68rem;color:var(--mu);line-height:1.7">
+          No camera. Truly transparent body.<br>
+          Mirrors scene from GET /state.<br>
+          Goes into OBS as browser source.<br>
+          Real alpha compositing.
+        </div>
+      </div>
+    </div>
+    <div class="codeblk">
+      <span class="cm"># server.py — the entire state store</span><br>
+      _STATE = <span class="str">b"{}"</span>  <span class="cm"># tracker POSTs, render GETs</span><br>
+      _CMDS = []&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <span class="cm"># AI → board command queue</span><br><br>
+      <span class="cm"># POST /state: heartbeat + command channel</span><br>
+      <span class="kw">if</span> self.path == <span class="str">"/state"</span>:<br>
+      &nbsp;&nbsp;_STATE = body<br>
+      &nbsp;&nbsp;out = json.<span class="fn">dumps</span>(_CMDS[:<span class="num">8</span>]).<span class="fn">encode</span>()<br>
+      &nbsp;&nbsp;<span class="kw">del</span> _CMDS[:<span class="num">8</span>]<br>
+      &nbsp;&nbsp;<span class="cm"># respond with queued commands</span>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ STAGE 6: AI Command Channel ═══ -->
+<section class="stage" id="s5">
+  <span class="stage-num">06</span>
+  <div class="stage-inner">
+    <div class="badge">importance 9 / 10 <span class="role-tag role-ai">AI integration</span></div>
+    <h2><span class="hl-gd">AI Commands</span> — the assistant's hands + eyes</h2>
+    <p class="desc">
+      The AI drives the board via <strong>POST /cmd</strong> — a JSON body with an action from
+      the 13-verb allowlist. The server validates the action, enforces the media airlock
+      (only files inside <code>media/</code> can stage), and queues the command for the next
+      heartbeat. The AI reads the board back via <strong>GET /state</strong> or
+      <strong>board-state.sh</strong>.
+    </p>
+    <div class="pills">
+      <span class="pill gd">POST /cmd</span>
+      <span class="pill gd">board.sh</span>
+      <span class="pill gd">board-state.sh</span>
+      <span class="pill rs">13-verb allowlist</span>
+      <span class="pill rs">media airlock jail</span>
+    </div>
+    <div class="cmd-grid" id="cmdGrid"></div>
+    <div class="viz">
+      <div class="viz-label">command flow — AI to board</div>
+      <div class="hb-diagram">
+        <div class="hb-box" style="border-color:var(--gd)">
+          <div style="font-size:.6rem;color:var(--mu)">AI / CURL</div>
+          <div style="color:var(--gd);font-size:.72rem">board.sh '{...}'</div>
+        </div>
+        <span class="hb-arrow">→</span>
+        <div class="hb-box" style="border-color:var(--rs)">
+          <div style="font-size:.6rem;color:var(--mu)">SERVER</div>
+          <div style="color:var(--rs);font-size:.72rem">allowlist + airlock</div>
+          <div style="font-size:.55rem;color:var(--mu)">validate → _CMDS</div>
+        </div>
+        <span class="hb-arrow">→</span>
+        <div class="hb-box" style="border-color:var(--tl)">
+          <div style="font-size:.6rem;color:var(--mu)">HEARTBEAT</div>
+          <div style="color:var(--tl);font-size:.72rem">next POST /state</div>
+          <div style="font-size:.55rem;color:var(--mu)">~22ms latency</div>
+        </div>
+        <span class="hb-arrow">→</span>
+        <div class="hb-box" style="border-color:var(--ic)">
+          <div style="font-size:.6rem;color:var(--mu)">BOARD</div>
+          <div style="color:var(--ic);font-size:.72rem">applyCmds()</div>
+          <div style="font-size:.55rem;color:var(--mu)">materialize!</div>
+        </div>
+      </div>
+    </div>
+    <div class="codeblk">
+      <span class="cm"># the AI's hands — shell one-liner</span><br>
+      bin/board.sh <span class="str">'{"a":"present","title":"THE PLAN","body":"three steps"}'</span><br><br>
+      <span class="cm"># the AI's eyes — read what's on the board</span><br>
+      bin/board-state.sh<br>
+      <span class="cm"># → ON THE BOARD — 3 item(s):</span><br>
+      <span class="cm">#   - card "THE PLAN" @ center</span><br>
+      <span class="cm">#   - image diagram.png @ top-right</span><br>
+      <span class="cm">#   - open note "Meeting Notes" @ bottom-left</span>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ STAGE 7: 3D Models ═══ -->
+<section class="stage" id="s6">
+  <span class="stage-num">07</span>
+  <div class="stage-inner">
+    <div class="badge">importance 8 / 10 <span class="role-tag role-proc">rendering</span></div>
+    <h2><span class="hl-wf">three.js</span> — holograms + exploded views</h2>
+    <p class="desc">
+      GLB/glTF models from the media airlock get their own <strong>three.js scene</strong> per item —
+      each with its own WebGL renderer, camera, and canvas. Two modes: <strong>solid</strong>
+      (PBR with environment map) and <strong>hologram</strong> (blue wireframe with rim shader).
+      The explode verb separates child meshes along their normals.
+    </p>
+    <div class="pills">
+      <span class="pill">GLTFLoader</span>
+      <span class="pill">DRACOLoader</span>
+      <span class="pill">WebGLRenderer (alpha)</span>
+      <span class="pill">ShaderMaterial (holo)</span>
+      <span class="pill ic">applyExplode(sc, tgt)</span>
+    </div>
+    <div class="viz">
+      <div class="viz-label">3D render pipeline — one scene per model item</div>
+      <canvas id="viz3D" height="80"></canvas>
+    </div>
+    <div class="codeblk">
+      <span class="cm">// two render modes, chosen by folder</span><br>
+      <span class="kw">function</span> <span class="fn">modelModeFor</span>(src, want) {<br>
+      &nbsp;&nbsp;<span class="kw">if</span> (src.<span class="fn">includes</span>(<span class="str">'/holo/'</span>)) <span class="kw">return</span> <span class="str">'holo'</span>;<br>
+      &nbsp;&nbsp;<span class="kw">return</span> want || <span class="str">'solid'</span>;<br>
+      }<br><br>
+      <span class="cm">// explode: separate child meshes along normals</span><br>
+      <span class="kw">function</span> <span class="fn">applyExplode</span>(sc, tgt) {<br>
+      &nbsp;&nbsp;sc.children.<span class="fn">forEach</span>(child => {<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;child.position.<span class="fn">copy</span>(child._origPos);<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;child.position.<span class="fn">addScaledVector</span>(child._explodeDir, tgt);<br>
+      &nbsp;&nbsp;});<br>
+      }
+    </div>
+  </div>
+</section>
+
+<!-- ═══ RING STATE ═══ -->
+<section class="stage" id="sRing" style="min-height:auto;padding:3rem 2rem">
+  <div class="stage-inner">
+    <h2 style="margin-bottom:1rem"><span class="hl-tl">The Ring</span> — the assistant's face</h2>
+    <p class="desc" style="max-width:600px;margin-bottom:1.2rem">
+      The ring reads <code>/orb</code> every 500ms. Three tiny files in <code>state/</code>
+      control it: <strong>state</strong> (idle/listening/thinking/speaking),
+      <strong>mood.json</strong> (green/amber/red), <strong>wave.json</strong> (64 audio samples).
+      Missing files = graceful idle.
+    </p>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:.8rem;margin:1rem 0">
+      <div class="viz" style="margin:0;padding:.8rem;text-align:center">
+        <div style="width:48px;height:48px;border-radius:50%;border:2px solid var(--mu);margin:0 auto .4rem;animation:breathe 3s ease-in-out infinite"></div>
+        <div style="font-size:.65rem;color:var(--mu)">idle</div>
+      </div>
+      <div class="viz" style="margin:0;padding:.8rem;text-align:center">
+        <div style="width:48px;height:48px;border-radius:50%;border:2px solid var(--ic);margin:0 auto .4rem;box-shadow:0 0 12px rgba(92,200,240,.3)"></div>
+        <div style="font-size:.65rem;color:var(--ic)">listening</div>
+      </div>
+      <div class="viz" style="margin:0;padding:.8rem;text-align:center">
+        <div style="width:48px;height:48px;border-radius:50%;border:2px solid var(--gd);margin:0 auto .4rem;animation:spin 1.5s linear infinite;box-shadow:0 0 12px rgba(212,168,85,.3)"></div>
+        <div style="font-size:.65rem;color:var(--gd)">thinking</div>
+      </div>
+      <div class="viz" style="margin:0;padding:.8rem;text-align:center">
+        <div style="width:48px;height:48px;border-radius:50%;border:2px solid var(--tl);margin:0 auto .4rem;box-shadow:0 0 16px rgba(111,227,201,.4);animation:pulse 0.8s ease-in-out infinite"></div>
+        <div style="font-size:.65rem;color:var(--tl)">speaking</div>
+      </div>
+    </div>
+    <style>
+      @keyframes breathe{0%,100%{transform:scale(1);opacity:.6}50%{transform:scale(1.08);opacity:1}}
+      @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+      @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.12)}}
+    </style>
+  </div>
+</section>
+
+<footer>
+  <p>barehands Pipeline Visualisation — <a href="https://github.com/jaredrhod/barehands">jaredrhod/barehands</a></p>
+</footer>
+
+<!-- ═══ JAVASCRIPT ═══ -->
+<script>
+(function(){
+  const {animate,stagger,inView}=Motion;
+
+  /* ── Hero hand canvas ── */
+  const hC=document.getElementById('heroHand'),hCtx=hC.getContext('2d');
+  let hPhase=0;
+  const CONNECTIONS=[[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
+  function genHand(cx,cy,s,spread,t){
+    const pts=[];
+    const wrist={x:cx,y:cy+s*0.5};
+    pts.push(wrist);
+    const angles=[-0.5,-0.25,0,0.2,0.4];
+    const lens=[0.4,0.5,0.55,0.48,0.35];
+    const segs=4;
+    for(let f=0;f<5;f++){
+      const base=angles[f]+Math.sin(t+f*0.7)*0.06*spread;
+      let px=wrist.x,py=wrist.y;
+      for(let j=0;j<segs;j++){
+        const segLen=s*lens[f]/segs*(1+Math.sin(t*0.8+f+j)*0.04*spread);
+        const a=base-Math.PI/2+j*0.08*spread;
+        px+=Math.cos(a)*segLen;py+=Math.sin(a)*segLen;
+        pts.push({x:px,y:py});
+      }
+    }
+    return pts;
+  }
+  function drawHero(){
+    const w=hC.width,h=hC.height;hCtx.clearRect(0,0,w,h);hPhase+=0.025;
+    const pts=genHand(w*0.5,h*0.55,Math.min(w,h)*0.5,1,hPhase);
+    hCtx.strokeStyle='rgba(111,227,201,0.3)';hCtx.lineWidth=1.5;
+    CONNECTIONS.forEach(([a,b])=>{
+      if(pts[a]&&pts[b]){
+        const ai=a===0?0:(1+(a-1)*4+Math.floor((a-1)/4));
+        hCtx.beginPath();hCtx.moveTo(pts[a].x,pts[a].y);hCtx.lineTo(pts[b].x,pts[b].y);hCtx.stroke();
+      }
+    });
+    pts.forEach((p,i)=>{
+      const r=i===0?4:(i%4===0?3.5:2.5);
+      const isTip=[4,8,12,16,20].includes(i);
+      hCtx.beginPath();hCtx.arc(p.x,p.y,r,0,Math.PI*2);
+      hCtx.fillStyle=isTip?'rgba(111,227,201,0.9)':'rgba(111,227,201,0.4)';
+      hCtx.fill();
+      if(isTip){hCtx.beginPath();hCtx.arc(p.x,p.y,r+4,0,Math.PI*2);hCtx.fillStyle='rgba(111,227,201,0.1)';hCtx.fill();}
+    });
+    // cursor between index tip + thumb tip
+    if(pts[4]&&pts[8]){
+      const mx=(pts[4].x+pts[8].x)/2,my=(pts[4].y+pts[8].y)/2;
+      hCtx.beginPath();hCtx.arc(mx,my,6,0,Math.PI*2);
+      hCtx.fillStyle='rgba(212,168,85,0.7)';hCtx.fill();
+      hCtx.beginPath();hCtx.arc(mx,my,12,0,Math.PI*2);
+      hCtx.strokeStyle='rgba(212,168,85,0.3)';hCtx.lineWidth=1;hCtx.stroke();
+    }
+    requestAnimationFrame(drawHero);
+  }
+  drawHero();
+
+  /* ── Hero entrance ── */
+  animate('.hero-tag',{opacity:[0,.5],y:[12,0]},{duration:.8,delay:.2});
+  animate('.hero h1',{opacity:[0,1],y:[24,0]},{duration:.9,delay:.4});
+  animate('.hero-sub',{opacity:[0,1],y:[12,0]},{duration:.7,delay:.7});
+  animate('.hero-zero',{opacity:[0,1],y:[10,0]},{duration:.6,delay:.9});
+  animate('.scroll-cue',{opacity:[0,1]},{duration:.6,delay:1.2});
+
+  /* ── Pipeline bar ── */
+  const nodes=document.querySelectorAll('.pn'),lines=document.querySelectorAll('.pn-line');
+  function setPipe(idx){nodes.forEach((n,i)=>n.classList.toggle('on',i<=idx));lines.forEach((l,i)=>l.classList.toggle('on',i<idx))}
+  nodes.forEach((n,i)=>n.addEventListener('click',()=>{const el=document.getElementById('s'+i);if(el)el.scrollIntoView({behavior:'smooth'})}));
+
+  /* ── Stage scroll ── */
+  const stageIds=['s0','s1','s2','s3','s4','s5','s6'];
+  stageIds.forEach((id,i)=>{
+    const el=document.getElementById(id);if(!el)return;
+    inView(el,()=>setPipe(i),{amount:.3});
+    inView(el,()=>{animate(el.querySelectorAll('.badge,h2,.imp,.desc,.pills,.codeblk,.viz,.hb-diagram,.split,.cmd-grid'),{opacity:[0,1],y:[20,0]},{duration:.5,delay:stagger(.08)})},{amount:.15});
+  });
+
+  /* ── Hand skeleton viz ── */
+  const handC=document.getElementById('handCanvas'),handCtx=handC.getContext('2d');
+  let handPhase=0;
+  function drawHand(){
+    const rect=handC.getBoundingClientRect();
+    handC.width=rect.width*2;handC.height=rect.height*2;
+    handCtx.scale(2,2);
+    const w=rect.width,h=rect.height;handCtx.clearRect(0,0,w,h);handPhase+=0.02;
+    const pts=genHand(w*0.5,h*0.55,Math.min(w,h)*0.42,1.2,handPhase);
+    // connections
+    handCtx.strokeStyle='rgba(111,227,201,0.2)';handCtx.lineWidth=1;
+    for(let f=0;f<5;f++){
+      const base=1+f*4;
+      handCtx.beginPath();handCtx.moveTo(pts[0].x,pts[0].y);
+      handCtx.lineTo(pts[base].x,pts[base].y);
+      for(let j=1;j<4;j++)handCtx.lineTo(pts[base+j].x,pts[base+j].y);
+      handCtx.stroke();
+    }
+    // landmarks
+    pts.forEach((p,i)=>{
+      const isTip=[4,8,12,16,20].includes(i);
+      handCtx.beginPath();handCtx.arc(p.x,p.y,isTip?3:2,0,Math.PI*2);
+      handCtx.fillStyle=isTip?'rgba(111,227,201,0.8)':'rgba(111,227,201,0.35)';
+      handCtx.fill();
+    });
+    // cursor
+    if(pts[4]&&pts[8]){
+      const mx=(pts[4].x+pts[8].x)/2,my=(pts[4].y+pts[8].y)/2;
+      const gap=Math.hypot(pts[4].x-pts[8].x,pts[4].y-pts[8].y);
+      const span=Math.hypot(pts[0].x-pts[9].x,pts[0].y-pts[9].y);
+      const ratio=span>0?gap/span:1;
+      const pinched=ratio<0.25;
+      handCtx.beginPath();handCtx.arc(mx,my,pinched?4:6,0,Math.PI*2);
+      handCtx.fillStyle=pinched?'rgba(212,168,85,0.85)':'rgba(111,227,201,0.5)';
+      handCtx.fill();
+      handCtx.beginPath();handCtx.arc(mx,my,pinched?8:14,0,Math.PI*2);
+      handCtx.strokeStyle=pinched?'rgba(212,168,85,0.4)':'rgba(111,227,201,0.15)';
+      handCtx.lineWidth=1;handCtx.stroke();
+      // labels
+      handCtx.fillStyle='rgba(94,138,130,0.6)';handCtx.font='9px JetBrains Mono';
+      handCtx.fillText(`gap/span: ${ratio.toFixed(2)}`,8,h-8);
+      handCtx.fillText(pinched?'PINCHED':'open',w-70,h-8);
+    }
+    // landmark indices
+    [0,4,8,9,12,16,20].forEach(i=>{
+      if(pts[i]){handCtx.fillStyle='rgba(94,138,130,0.4)';handCtx.font='8px JetBrains Mono';handCtx.fillText(i,pts[i].x+5,pts[i].y-5);}
+    });
+    requestAnimationFrame(drawHand);
+  }
+  drawHand();
+
+  /* ── Pinch canvases ── */
+  function drawPinchHand(canvasId,isOK){
+    const c=document.getElementById(canvasId),ctx=c.getContext('2d');
+    const w=c.width,h=c.height;ctx.clearRect(0,0,w,h);
+    const cx=w/2,cy=h/2+10,s=35;
+    const col=isOK?'rgba(72,184,160,':'rgba(232,99,122,';
+    // Draw simplified hand shape
+    ctx.strokeStyle=col+'0.4)';ctx.lineWidth=1.5;
+    if(isOK){
+      // OK sign: index curled to thumb, others extended
+      const thumb={x:cx-12,y:cy-5},index={x:cx-8,y:cy-10};
+      ctx.beginPath();ctx.arc(cx,cy+20,8,0,Math.PI*2);ctx.fillStyle=col+'0.2)';ctx.fill(); // palm
+      ctx.beginPath();ctx.moveTo(cx,cy+12);ctx.lineTo(thumb.x,thumb.y);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(cx,cy+12);ctx.lineTo(index.x,index.y);ctx.stroke();
+      // back three extended
+      [-8,0,10].forEach((dx,i)=>{
+        ctx.beginPath();ctx.moveTo(cx+dx,cy+12);
+        ctx.lineTo(cx+dx+2,cy-25-i*5);ctx.stroke();
+        ctx.beginPath();ctx.arc(cx+dx+2,cy-25-i*5,2,0,Math.PI*2);ctx.fillStyle=col+'0.6)';ctx.fill();
+      });
+      // pinch circle
+      ctx.beginPath();ctx.arc((thumb.x+index.x)/2,(thumb.y+index.y)/2,6,0,Math.PI*2);
+      ctx.strokeStyle='rgba(212,168,85,0.6)';ctx.stroke();
+    } else {
+      // Fist: all fingers curled
+      ctx.beginPath();ctx.arc(cx,cy,14,0,Math.PI*2);ctx.fillStyle=col+'0.15)';ctx.fill();
+      [-12,-4,4,12].forEach(dx=>{
+        ctx.beginPath();ctx.moveTo(cx+dx,cy-5);ctx.lineTo(cx+dx,cy+5);ctx.stroke();
+      });
+      ctx.beginPath();ctx.moveTo(cx-16,cy);ctx.lineTo(cx-10,cy-8);ctx.stroke();
+    }
+  }
+  drawPinchHand('pinchOK',true);
+  drawPinchHand('pinchFist',false);
+
+  /* ── Pinch meter ── */
+  const pFill=document.getElementById('pinchFill'),pVal=document.getElementById('pinchVal');
+  let pp=0;
+  function animPinch(){
+    pp+=0.012;
+    const cycle=Math.sin(pp);
+    const contrast=cycle>0?0.15+cycle*0.45:0.02+Math.abs(cycle)*0.08;
+    const pct=Math.min(1,contrast/0.5);
+    pFill.style.width=(pct*100)+'%';
+    pFill.style.background=contrast>=0.18?'var(--sk)':'var(--rs)';
+    pVal.textContent=contrast.toFixed(2)+(contrast>=0.18?' ✓ PINCH':' · fist');
+    pVal.style.color=contrast>=0.18?'var(--sk)':'var(--rs)';
+    requestAnimationFrame(animPinch);
+  }
+  animPinch();
+
+  /* ── Physics canvas ── */
+  const phC=document.getElementById('physCanvas'),phCtx=phC.getContext('2d');
+  let phP=0;
+  const phItems=[{x:0.2,y:0.5,vx:0,vy:0,w:60,h:40},{x:0.6,y:0.3,vx:0.5,vy:-0.3,w:50,h:35},{x:0.8,y:0.6,vx:-0.3,vy:0.2,w:45,h:30}];
+  function drawPhys(){
+    const rect=phC.getBoundingClientRect();phC.width=rect.width;phC.height=70;
+    const w=rect.width,h=70;phCtx.clearRect(0,0,w,h);phP+=0.02;
+    // grid
+    phCtx.strokeStyle='rgba(111,227,201,0.04)';phCtx.lineWidth=1;
+    for(let x=0;x<w;x+=40){phCtx.beginPath();phCtx.moveTo(x,0);phCtx.lineTo(x,h);phCtx.stroke();}
+    // items
+    phItems.forEach((it,idx)=>{
+      it.x+=it.vx*0.003;it.y+=it.vy*0.003;
+      if(it.x<0.05||it.x>0.95)it.vx*=-1;
+      if(it.y<0.05||it.y>0.95)it.vy*=-1;
+      const px=it.x*w,py=it.y*h;
+      const glow=0.15+Math.sin(phP+idx*2)*0.1;
+      phCtx.fillStyle=`rgba(111,227,201,${glow})`;
+      phCtx.strokeStyle=`rgba(111,227,201,${glow+0.2})`;phCtx.lineWidth=1;
+      phCtx.beginPath();
+      const r=6;phCtx.roundRect(px-it.w/2,py-it.h/2,it.w,it.h,r);
+      phCtx.fill();phCtx.stroke();
+      phCtx.fillStyle=`rgba(223,243,238,${glow+0.1})`;phCtx.font='9px JetBrains Mono';
+      phCtx.fillText(['card','note','img'][idx],px-12,py+3);
+    });
+    requestAnimationFrame(drawPhys);
+  }
+  drawPhys();
+
+  /* ── 3D viz canvas ── */
+  const tdC=document.getElementById('viz3D'),tdCtx=tdC.getContext('2d');
+  let tdP=0;
+  function draw3D(){
+    const rect=tdC.getBoundingClientRect();tdC.width=rect.width;tdC.height=80;
+    const w=rect.width,h=80;tdCtx.clearRect(0,0,w,h);tdP+=0.015;
+    // wireframe cube rotating
+    const cx=w*0.25,cy=h*0.5,sz=22;
+    const verts=[[-1,-1,-1],[1,-1,-1],[1,1,-1],[-1,1,-1],[-1,-1,1],[1,-1,1],[1,1,1],[-1,1,1]];
+    const edges=[[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],[0,4],[1,5],[2,6],[3,7]];
+    const cos=Math.cos(tdP),sin=Math.sin(tdP);
+    const proj=verts.map(([x,y,z])=>{
+      let rx=x*cos-z*sin,rz=x*sin+z*cos;
+      let ry=y*Math.cos(tdP*0.7)-rz*Math.sin(tdP*0.7);
+      rz=y*Math.sin(tdP*0.7)+rz*Math.cos(tdP*0.7);
+      const scale=3/(3+rz*0.3);
+      return{x:cx+rx*sz*scale,y:cy+ry*sz*scale,z:rz};
+    });
+    tdCtx.strokeStyle='rgba(167,139,250,0.35)';tdCtx.lineWidth=1;
+    edges.forEach(([a,b])=>{tdCtx.beginPath();tdCtx.moveTo(proj[a].x,proj[a].y);tdCtx.lineTo(proj[b].x,proj[b].y);tdCtx.stroke();});
+    proj.forEach(p=>{tdCtx.beginPath();tdCtx.arc(p.x,p.y,2,0,Math.PI*2);tdCtx.fillStyle='rgba(167,139,250,0.5)';tdCtx.fill();});
+    // explode label
+    const ex=(Math.sin(tdP*0.5)*0.5+0.5);
+    tdCtx.fillStyle='rgba(167,139,250,0.3)';tdCtx.font='9px JetBrains Mono';
+    tdCtx.fillText(`explode: ${(ex*100).toFixed(0)}%`,cx-30,h-5);
+    // solid cube on right
+    const cx2=w*0.7;
+    const proj2=verts.map(([x,y,z])=>{
+      let rx=x*Math.cos(tdP*0.6)-z*Math.sin(tdP*0.6),rz=x*Math.sin(tdP*0.6)+z*Math.cos(tdP*0.6);
+      let ry=y*Math.cos(tdP*0.4)-rz*Math.sin(tdP*0.4);
+      rz=y*Math.sin(tdP*0.4)+rz*Math.cos(tdP*0.4);
+      const scale=3/(3+rz*0.3);
+      return{x:cx2+rx*sz*scale,y:cy+ry*sz*scale,z:rz};
+    });
+    // sort faces by z for basic depth
+    const faces=[[0,1,2,3],[4,5,6,7],[0,1,5,4],[2,3,7,6],[0,3,7,4],[1,2,6,5]];
+    faces.forEach(f=>{
+      const avgZ=f.reduce((s,i)=>s+proj2[i].z,0)/4;
+      const alpha=0.08+avgZ*0.03;
+      tdCtx.beginPath();tdCtx.moveTo(proj2[f[0]].x,proj2[f[0]].y);
+      f.slice(1).forEach(i=>tdCtx.lineTo(proj2[i].x,proj2[i].y));
+      tdCtx.closePath();
+      tdCtx.fillStyle=`rgba(92,200,240,${Math.max(0.03,alpha)})`;tdCtx.fill();
+      tdCtx.strokeStyle='rgba(92,200,240,0.2)';tdCtx.stroke();
+    });
+    tdCtx.fillStyle='rgba(92,200,240,0.3)';tdCtx.fillText('solid PBR',cx2-25,h-5);
+    requestAnimationFrame(draw3D);
+  }
+  draw3D();
+
+  /* ── Command grid ── */
+  const cmds=[
+    {name:'present',desc:'Spotlight center stage, dim the rest'},
+    {name:'add_card',desc:'Stage a glass card with title + body'},
+    {name:'add_img',desc:'Stage an image from the media airlock'},
+    {name:'hand',desc:'Deliver to user\'s reach'},
+    {name:'give',desc:'Deliver INTO user\'s hand'},
+    {name:'explode',desc:'Part a 3D model'},
+    {name:'assemble',desc:'Snap model back together'},
+    {name:'yank',desc:'Shake + rip an item away'},
+    {name:'hover',desc:'Pulse for attention'},
+    {name:'scroll_note',desc:'Glide the newest note'},
+    {name:'clear',desc:'Scorched earth — ring included'},
+    {name:'reset',desc:'Ring center stage (the gather)'},
+    {name:'widget',desc:'Summon a widget (e.g. ring)'},
+  ];
+  const grid=document.getElementById('cmdGrid');
+  cmds.forEach(c=>{
+    const el=document.createElement('div');el.className='cmd-card';
+    el.innerHTML=`<div class="cmd-name">${c.name}</div><div class="cmd-desc">${c.desc}</div>`;
+    grid.appendChild(el);
+  });
+  inView('#cmdGrid',()=>{animate(grid.querySelectorAll('.cmd-card'),{opacity:[0,1],y:[12,0]},{duration:.35,delay:stagger(.04)})},{amount:.15});
+
+})();
+</script>
+</body>
+</html>

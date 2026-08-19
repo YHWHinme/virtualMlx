@@ -1,0 +1,1356 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Voice Loop — Request Pipeline</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link
+    href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Space+Grotesk:wght@400;600;700&display=swap"
+    rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/@motionone/dom@10.18.0/dist/motion-umd.dev.js"></script>
+  <style>
+    *,
+    *::before,
+    *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg: #06080d;
+      --surface: #0c1018;
+      --border: #181e2c;
+      --text: #d4d4dc;
+      --muted: #5c6370;
+      --cyan: #00e5ff;
+      --mag: #ff2d6f;
+      --grn: #39ff8e;
+      --amb: #ffb545;
+      --pur: #b47aff;
+      --mono: 'JetBrains Mono', monospace;
+      --sans: 'Space Grotesk', sans-serif;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 14px;
+      line-height: 1.7;
+      overflow-x: hidden;
+    }
+
+    ::selection {
+      background: var(--cyan);
+      color: var(--bg);
+    }
+
+    /* ── HERO ── */
+    .hero {
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      background: radial-gradient(ellipse at 50% 40%, #0a1228 0%, var(--bg) 70%);
+    }
+
+    .hero::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0, 229, 255, .012) 3px, rgba(0, 229, 255, .012) 4px);
+      pointer-events: none;
+    }
+
+    .hero-tag {
+      font-size: .7rem;
+      letter-spacing: .35em;
+      text-transform: uppercase;
+      color: var(--cyan);
+      opacity: .55;
+    }
+
+    .hero h1 {
+      font-family: var(--sans);
+      font-size: clamp(2.6rem, 6vw, 5rem);
+      font-weight: 700;
+      letter-spacing: -.03em;
+      text-align: center;
+      background: linear-gradient(135deg, var(--cyan), #fff 55%, var(--mag));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-top: .4rem;
+    }
+
+    .hero-sub {
+      color: var(--muted);
+      font-size: .88rem;
+      margin-top: .7rem;
+      text-align: center;
+      max-width: 460px;
+    }
+
+    #heroWave {
+      width: min(88%, 780px);
+      height: 70px;
+      margin-top: 2.2rem;
+      opacity: .65;
+    }
+
+    .scroll-cue {
+      position: absolute;
+      bottom: 2.2rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: .45rem;
+      color: var(--muted);
+      font-size: .65rem;
+      letter-spacing: .15em;
+    }
+
+    .scroll-cue .arr {
+      width: 18px;
+      height: 18px;
+      border-right: 1.5px solid var(--cyan);
+      border-bottom: 1.5px solid var(--cyan);
+      transform: rotate(45deg);
+      animation: bob 2.2s ease-in-out infinite;
+    }
+
+    @keyframes bob {
+
+      0%,
+      100% {
+        transform: rotate(45deg) translate(0, 0)
+      }
+
+      50% {
+        transform: rotate(45deg) translate(4px, 4px)
+      }
+    }
+
+    /* ── PIPELINE BAR ── */
+    .pipeline {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: rgba(6, 8, 13, .92);
+      backdrop-filter: blur(14px);
+      border-bottom: 1px solid var(--border);
+      padding: .85rem 1.5rem;
+    }
+
+    .pipe-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      max-width: 920px;
+      margin: 0 auto;
+    }
+
+    .pn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      border: 2px solid var(--border);
+      background: var(--surface);
+      font-size: .6rem;
+      font-weight: 700;
+      color: var(--muted);
+      flex-shrink: 0;
+      position: relative;
+      transition: all .35s ease;
+      cursor: pointer;
+    }
+
+    .pn.on {
+      border-color: var(--cyan);
+      color: var(--cyan);
+      box-shadow: 0 0 14px rgba(0, 229, 255, .3);
+    }
+
+    .pn.sd {
+      border-color: var(--amb);
+    }
+
+    .pn.sd.on {
+      border-color: var(--amb);
+      color: var(--amb);
+      box-shadow: 0 0 14px rgba(255, 181, 69, .35);
+    }
+
+    .pn-line {
+      width: 36px;
+      height: 2px;
+      background: var(--border);
+      flex-shrink: 0;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .pn-line::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: var(--cyan);
+      transform: scaleX(0);
+      transform-origin: left;
+      transition: transform .5s ease;
+    }
+
+    .pn-line.on::after {
+      transform: scaleX(1);
+    }
+
+    .pn-tip {
+      position: absolute;
+      top: 42px;
+      left: 50%;
+      transform: translateX(-50%);
+      white-space: nowrap;
+      font-size: .58rem;
+      color: var(--muted);
+      opacity: 0;
+      transition: opacity .2s;
+      pointer-events: none;
+    }
+
+    .pn:hover .pn-tip {
+      opacity: 1;
+    }
+
+    /* ── STAGE SECTIONS ── */
+    .stage {
+      min-height: 88vh;
+      display: flex;
+      align-items: center;
+      padding: 5rem 2rem;
+      position: relative;
+    }
+
+    .stage-inner {
+      max-width: 900px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .stage-num {
+      font-size: 5.5rem;
+      font-weight: 700;
+      font-family: var(--sans);
+      line-height: 1;
+      opacity: .06;
+      position: absolute;
+      top: 3.5rem;
+      right: 2rem;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: .12rem .6rem;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      font-size: .6rem;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: .7rem;
+    }
+
+    .stage h2 {
+      font-family: var(--sans);
+      font-size: clamp(1.6rem, 3.5vw, 2.4rem);
+      font-weight: 700;
+      line-height: 1.2;
+      margin-bottom: .35rem;
+    }
+
+    .hl-c {
+      color: var(--cyan);
+    }
+
+    .hl-m {
+      color: var(--mag);
+    }
+
+    .hl-g {
+      color: var(--grn);
+    }
+
+    .hl-a {
+      color: var(--amb);
+    }
+
+    .hl-p {
+      color: var(--pur);
+    }
+
+    .stage .imp {
+      font-size: .82rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+    }
+
+    .stage .desc {
+      color: var(--muted);
+      max-width: 580px;
+      margin-bottom: 1.4rem;
+      font-size: .88rem;
+    }
+
+    .stage .desc strong {
+      color: var(--text);
+      font-weight: 500;
+    }
+
+    .role-tag {
+      display: inline-block;
+      padding: .1rem .45rem;
+      border-radius: 3px;
+      font-size: .62rem;
+      font-weight: 600;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      margin-left: .4rem;
+      vertical-align: middle;
+    }
+
+    .role-io {
+      background: rgba(255, 181, 69, .12);
+      color: var(--amb);
+      border: 1px solid rgba(255, 181, 69, .25);
+    }
+
+    .role-proc {
+      background: rgba(0, 229, 255, .1);
+      color: var(--cyan);
+      border: 1px solid rgba(0, 229, 255, .2);
+    }
+
+    .role-gate {
+      background: rgba(255, 45, 111, .1);
+      color: var(--mag);
+      border: 1px solid rgba(255, 45, 111, .2);
+    }
+
+    /* ── CODE BLOCK ── */
+    .codeblk {
+      background: #0a0e16;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1.1rem 1.3rem;
+      font-size: .78rem;
+      line-height: 1.85;
+      overflow-x: auto;
+      margin: 1rem 0;
+      max-width: 580px;
+    }
+
+    .codeblk .kw {
+      color: var(--pur);
+    }
+
+    .codeblk .fn {
+      color: var(--cyan);
+    }
+
+    .codeblk .str {
+      color: var(--grn);
+    }
+
+    .codeblk .cm {
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    .codeblk .num {
+      color: var(--amb);
+    }
+
+    .codeblk .op {
+      color: var(--mag);
+    }
+
+    /* ── VIZ CONTAINERS ── */
+    .viz {
+      margin: 1.6rem 0;
+      padding: 1.4rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      position: relative;
+    }
+
+    .viz-label {
+      font-size: .6rem;
+      letter-spacing: .22em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: .9rem;
+    }
+
+    .viz canvas {
+      display: block;
+      width: 100%;
+      border-radius: 4px;
+    }
+
+    /* ── DATA PILLS ── */
+    .pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .45rem;
+      margin: .9rem 0;
+    }
+
+    .pill {
+      padding: .28rem .65rem;
+      background: rgba(0, 229, 255, .06);
+      border: 1px solid rgba(0, 229, 255, .14);
+      border-radius: 3px;
+      font-size: .72rem;
+      color: var(--cyan);
+      font-weight: 500;
+    }
+
+    .pill.m {
+      background: rgba(255, 45, 111, .06);
+      border-color: rgba(255, 45, 111, .14);
+      color: var(--mag);
+    }
+
+    .pill.a {
+      background: rgba(255, 181, 69, .06);
+      border-color: rgba(255, 181, 69, .14);
+      color: var(--amb);
+    }
+
+    .pill.g {
+      background: rgba(57, 255, 142, .06);
+      border-color: rgba(57, 255, 142, .14);
+      color: var(--grn);
+    }
+
+    /* ── BARS (numpy / vad viz) ── */
+    .bar-row {
+      display: flex;
+      align-items: flex-end;
+      gap: 2px;
+      height: 56px;
+    }
+
+    .bar-row .b {
+      flex: 1;
+      background: var(--cyan);
+      border-radius: 2px 2px 0 0;
+      opacity: .7;
+      transition: height .25s ease;
+    }
+
+    .prob-wrap {
+      margin-top: 1rem;
+    }
+
+    .prob-track {
+      width: 100%;
+      height: 8px;
+      background: var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: .4rem;
+    }
+
+    .prob-fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width .4s ease;
+    }
+
+    .prob-val {
+      font-size: .78rem;
+      font-weight: 600;
+      margin-top: .3rem;
+    }
+
+    /* ── TOKEN STREAM ── */
+    .tokens {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .3rem;
+      margin: .6rem 0;
+    }
+
+    .tok {
+      padding: .18rem .48rem;
+      background: rgba(0, 229, 255, .04);
+      border: 1px solid rgba(0, 229, 255, .1);
+      border-radius: 2px;
+      font-size: .72rem;
+      color: var(--text);
+      opacity: 0;
+      transform: translateY(6px);
+    }
+
+    .tok.vis {
+      opacity: 1;
+      transform: translateY(0);
+      transition: all .25s ease;
+    }
+
+    /* ── NATIVE SECTION ── */
+    .native {
+      padding: 5rem 2rem;
+      background: linear-gradient(180deg, var(--bg) 0%, #080c18 100%);
+      border-top: 1px solid var(--border);
+    }
+
+    .native-inner {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .native h2 {
+      font-family: var(--sans);
+      font-size: 2rem;
+      font-weight: 700;
+      margin-bottom: .4rem;
+    }
+
+    .native .sub {
+      color: var(--muted);
+      font-size: .85rem;
+      margin-bottom: 2.2rem;
+    }
+
+    .mod-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: .9rem;
+    }
+
+    .mod-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1.1rem;
+      transition: border-color .3s, box-shadow .3s;
+    }
+
+    .mod-card:hover {
+      border-color: var(--cyan);
+      box-shadow: 0 0 24px rgba(0, 229, 255, .06);
+    }
+
+    .mod-card h3 {
+      font-family: var(--sans);
+      font-size: .95rem;
+      font-weight: 600;
+      margin-bottom: .3rem;
+    }
+
+    .mod-card .role {
+      font-size: .68rem;
+      color: var(--muted);
+      margin-bottom: .45rem;
+    }
+
+    .mod-card code {
+      font-size: .66rem;
+      color: var(--cyan);
+      background: rgba(0, 229, 255, .05);
+      padding: .08rem .28rem;
+      border-radius: 2px;
+    }
+
+    /* ── FOOTER ── */
+    footer {
+      padding: 3rem 2rem;
+      text-align: center;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: .72rem;
+    }
+
+    footer a {
+      color: var(--cyan);
+      text-decoration: none;
+    }
+
+    /* ── FLOW ARROW between viz ── */
+    .flow-arrow {
+      text-align: center;
+      font-size: 1.4rem;
+      color: var(--cyan);
+      opacity: .4;
+      margin: .4rem 0;
+    }
+
+    /* ── AEC diagram ── */
+    .aec-diagram {
+      display: flex;
+      align-items: center;
+      gap: .8rem;
+      flex-wrap: wrap;
+      margin: 1rem 0;
+      font-size: .78rem;
+    }
+
+    .aec-box {
+      padding: .5rem .9rem;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: rgba(0, 229, 255, .04);
+      text-align: center;
+    }
+
+    .aec-arrow {
+      color: var(--cyan);
+      font-size: 1.1rem;
+      opacity: .5;
+    }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 700px) {
+      .pn-line {
+        width: 18px;
+      }
+
+      .pn {
+        width: 28px;
+        height: 28px;
+        font-size: .5rem;
+      }
+
+      .stage {
+        padding: 3rem 1rem;
+      }
+
+      .stage-num {
+        font-size: 3.5rem;
+        right: 1rem;
+      }
+
+      .codeblk {
+        font-size: .7rem;
+        padding: .8rem 1rem;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- ═══════════════════════ HERO ═══════════════════════ -->
+  <section class="hero">
+    <span class="hero-tag">on-device voice agent · mac apple silicon</span>
+    <h1>Voice Loop</h1>
+    <p class="hero-sub">How your voice travels from microphone to LLM and back — every package, every buffer, every
+      thread.</p>
+    <canvas id="heroWave" width="780" height="70"></canvas>
+    <div class="scroll-cue">
+      <span>SCROLL TO EXPLORE</span>
+      <div class="arr"></div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════ PIPELINE BAR ═══════════════════════ -->
+  <nav class="pipeline">
+    <div class="pipe-row">
+      <div class="pn sd on" data-stage="0">SD<span class="pn-tip">sounddevice (in)</span></div>
+      <div class="pn-line"></div>
+      <div class="pn" data-stage="1">np<span class="pn-tip">numpy</span></div>
+      <div class="pn-line"></div>
+      <div class="pn" data-stage="2">VAD<span class="pn-tip">silero-vad</span></div>
+      <div class="pn-line"></div>
+      <div class="pn" data-stage="3">ST<span class="pn-tip">onnxruntime</span></div>
+      <div class="pn-line"></div>
+      <div class="pn" data-stage="4">STT<span class="pn-tip">moonshine</span></div>
+      <div class="pn-line"></div>
+      <div class="pn" data-stage="5">LLM<span class="pn-tip">mlx-vlm</span></div>
+      <div class="pn-line"></div>
+      <div class="pn" data-stage="6">TTS<span class="pn-tip">kokoro</span></div>
+      <div class="pn-line"></div>
+      <div class="pn sd" data-stage="7">SD<span class="pn-tip">sounddevice (out)</span></div>
+    </div>
+  </nav>
+
+  <!-- ═══════════════════════ STAGE 1: sounddevice ═══════════════════════ -->
+  <section class="stage" id="s0">
+    <span class="stage-num">01</span>
+    <div class="stage-inner">
+      <div class="badge">importance 10 / 10 <span class="role-tag role-io">I/O backbone</span></div>
+      <h2><span class="hl-a">sounddevice</span> — the ears &amp; mouth</h2>
+      <p class="imp hl-a">The single most critical package — every sample enters and leaves through it.</p>
+      <p class="desc">
+        Opens the microphone as a continuous <strong>InputStream</strong> at 16 kHz mono float32.
+        Every 32 ms a new chunk arrives via callback and is pushed onto a <strong>thread-safe queue</strong>.
+        On the output side, an <strong>OutputStream</strong> feeds TTS audio to the speakers in small
+        frames so barge-in checks can interleave between writes.
+      </p>
+      <div class="pills">
+        <span class="pill a">sd.InputStream</span>
+        <span class="pill a">sd.OutputStream</span>
+        <span class="pill a">sd.play</span>
+        <span class="pill a">sd.stop</span>
+        <span class="pill a">sd.wait</span>
+        <span class="pill a">sd.default.latency</span>
+      </div>
+      <div class="codeblk">
+        <span class="cm"># mic capture — 32ms blocks, continuous callback</span><br>
+        <span class="kw">with</span> sd.<span class="fn">InputStream</span>(<br>
+        &nbsp;&nbsp;samplerate=<span class="num">16000</span>, channels=<span class="num">1</span>, dtype=<span
+          class="str">"float32"</span>,<br>
+        &nbsp;&nbsp;blocksize=<span class="num">512</span>, callback=callback<br>
+        ):<br>
+        &nbsp;&nbsp;<span class="kw">while</span> <span class="num">True</span>:<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;chunk = audio_q.<span class="fn">get</span>() <span class="cm"># 512 samples =
+          32ms</span>
+      </div>
+      <div class="viz">
+        <div class="viz-label">live mic stream — 32 ms chunks arriving</div>
+        <canvas id="vizSD" height="80"></canvas>
+      </div>
+      <div class="codeblk">
+        <span class="cm"># TTS output — small frames for interrupt checks</span><br>
+        out_stream = sd.<span class="fn">OutputStream</span>(samplerate=sr, channels=<span class="num">1</span>,
+        dtype=<span class="str">"float32"</span>)<br>
+        out_stream.<span class="fn">start</span>()<br>
+        <span class="kw">for</span> i <span class="kw">in</span> <span class="fn">range</span>(<span
+          class="num">0</span>, <span class="fn">len</span>(data), <span class="num">4096</span>):<br>
+        &nbsp;&nbsp;out_stream.<span class="fn">write</span>(data[i:i+<span class="num">4096</span>]) <span class="cm">#
+          barge-in check between frames</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════ STAGE 2: numpy ═══════════════════════ -->
+  <section class="stage" id="s1">
+    <span class="stage-num">02</span>
+    <div class="stage-inner">
+      <div class="badge">importance 10 / 10 <span class="role-tag role-proc">data engine</span></div>
+      <h2><span class="hl-c">numpy</span> — the universal glue</h2>
+      <p class="imp hl-c">Every audio buffer, every tensor conversion, every resample — all numpy, all the time.</p>
+      <p class="desc">
+        Audio chunks arrive as <strong>float32 ndarrays</strong>. They get accumulated in lists,
+        concatenated into utterances, resampled from 24 kHz → 16 kHz via <strong>np.interp</strong>,
+        and cast to <strong>int16</strong> for WAV encoding. The chime sound itself is synthesized
+        with numpy — sine waves shaped by a Hann-window envelope.
+      </p>
+      <div class="pills">
+        <span class="pill">np.zeros</span>
+        <span class="pill">np.concatenate</span>
+        <span class="pill">np.linspace</span>
+        <span class="pill">np.sin / np.cos</span>
+        <span class="pill">np.interp</span>
+        <span class="pill">np.frombuffer</span>
+        <span class="pill">np.pad</span>
+        <span class="pill">.astype</span>
+        <span class="pill">.clip</span>
+        <span class="pill">.reshape</span>
+        <span class="pill">.copy</span>
+        <span class="pill">np.float32</span>
+        <span class="pill">np.int16</span>
+      </div>
+      <div class="viz">
+        <div class="viz-label">audio buffer — float32 samples visualised</div>
+        <div class="bar-row" id="npBars"></div>
+      </div>
+      <div class="codeblk">
+        <span class="cm"># accumulate speech chunks into one utterance</span><br>
+        buf.<span class="fn">append</span>(chunk) <span class="cm"># each chunk: np.ndarray shape (512,), dtype
+          float32</span><br>
+        utterance = np.<span class="fn">concatenate</span>(buf) <span class="cm"># → shape (N,) full speech
+          segment</span><br><br>
+        <span class="cm"># resample TTS from 24kHz → 16kHz for AEC reference</span><br>
+        idx = np.<span class="fn">arange</span>(<span class="num">0</span>, <span class="fn">len</span>(samples), sr /
+        <span class="num">16000</span>)<br>
+        resampled = np.<span class="fn">interp</span>(idx, np.<span class="fn">arange</span>(<span
+          class="fn">len</span>(samples)), samples)
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════ STAGE 3: silero-vad ═══════════════════════ -->
+  <section class="stage" id="s2">
+    <span class="stage-num">03</span>
+    <div class="stage-inner">
+      <div class="badge">importance 10 / 10 <span class="role-tag role-gate">gate</span></div>
+      <h2><span class="hl-m">silero-vad</span> — the speech gatekeeper</h2>
+      <p class="imp hl-m">Decides when you're talking and when you've stopped — nothing downstream fires without it.</p>
+      <p class="desc">
+        Each 32 ms mic chunk is fed to Silero VAD which returns a <strong>speech probability</strong>
+        (0.0–1.0). Above <strong>0.5</strong> → accumulate audio. Below 0.5 → count silent chunks.
+        After enough silence, the accumulated buffer is sent to Smart Turn for final confirmation.
+        It also runs <strong>on the AEC-cleaned audio</strong> during TTS playback to detect barge-in.
+      </p>
+      <div class="pills">
+        <span class="pill m">load_silero_vad(onnx=True)</span>
+        <span class="pill m">vad(chunk, sample_rate)</span>
+        <span class="pill m">vad.reset_states()</span>
+      </div>
+      <div class="viz">
+        <div class="viz-label">speech probability — threshold at 0.5</div>
+        <div class="prob-wrap">
+          <div class="prob-track">
+            <div class="prob-fill" id="vadFill" style="width:0%;background:var(--mag)"></div>
+          </div>
+          <div class="prob-val hl-m" id="vadVal">0.00</div>
+        </div>
+      </div>
+      <div class="codeblk">
+        <span class="cm"># gate: is this chunk speech?</span><br>
+        speech_prob = <span class="fn">vad</span>(torch.<span class="fn">from_numpy</span>(chunk), <span
+          class="num">16000</span>)<br>
+        <span class="kw">if</span> speech_prob > <span class="num">0.5</span>: <span class="cm"># →
+          accumulate</span><br>
+        &nbsp;&nbsp;buf.<span class="fn">append</span>(chunk)<br><br>
+        <span class="cm"># also used during TTS for barge-in detection</span><br>
+        <span class="kw">if</span> <span class="fn">_vad_prob</span>(vad, cleaned_audio) > <span class="num">0.8</span>:
+        <span class="cm"># → user is speaking over TTS</span><br>
+        &nbsp;&nbsp;state[<span class="str">"consec_speech"</span>] += <span class="num">1</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════ STAGE 4: onnxruntime + transformers ═══════════════════════ -->
+  <section class="stage" id="s3">
+    <span class="stage-num">04</span>
+    <div class="stage-inner">
+      <div class="badge">importance 7 / 10 <span class="role-tag role-gate">turn gate</span></div>
+      <h2><span class="hl-p">onnxruntime</span> + <span class="hl-p">transformers</span> — Smart Turn</h2>
+      <p class="desc">
+        After silence is detected, <strong>Smart Turn v3</strong> confirms whether the speaker is
+        actually done or just pausing mid-sentence. The audio buffer is featurised with
+        <strong>WhisperFeatureExtractor</strong> (from transformers) and classified by the
+        <strong>ONNX model</strong>. If probability &lt; 0.5 → keep listening; ≥ 0.5 → send to STT.
+      </p>
+      <div class="pills">
+        <span class="pill">ort.InferenceSession</span>
+        <span class="pill">session.run</span>
+        <span class="pill g">WhisperFeatureExtractor</span>
+        <span class="pill g">extractor(audio, ...)</span>
+      </div>
+      <div class="viz">
+        <div class="viz-label">turn completion probability — threshold at 0.5</div>
+        <div class="prob-wrap">
+          <div class="prob-track">
+            <div class="prob-fill" id="stFill" style="width:0%;background:var(--pur)"></div>
+          </div>
+          <div class="prob-val hl-p" id="stVal">0.00</div>
+        </div>
+      </div>
+      <div class="codeblk">
+        <span class="cm"># extract whisper-style features from audio buffer</span><br>
+        features = extractor(audio, sampling_rate=<span class="num">16000</span>,<br>
+        &nbsp;&nbsp;max_length=max_samples, padding=<span class="str">"max_length"</span>, return_tensors=<span
+          class="str">"np"</span>)<br><br>
+        <span class="cm"># ONNX inference → turn probability</span><br>
+        prob = session.<span class="fn">run</span>(<span class="num">None</span>, {<span
+          class="str">"input_features"</span>: features.input_features})<br>
+        <span class="kw">if</span> prob >= <span class="num">0.5</span>: <span class="cm"># → turn complete, send to
+          Moonshine</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════ STAGE 5: moonshine ═══════════════════════ -->
+  <section class="stage" id="s4">
+    <span class="stage-num">05</span>
+    <div class="stage-inner">
+      <div class="badge">importance 9 / 10 <span class="role-tag role-proc">transcription</span></div>
+      <h2><span class="hl-g">moonshine-voice</span> — the ears</h2>
+      <p class="desc">
+        The complete utterance (numpy float32 array) is converted to a list and fed to
+        Moonshine's <strong>transcribe_without_streaming</strong> method. It runs on <strong>CPU</strong>
+        and returns structured lines, each with a <strong>.text</strong> field. These are joined
+        into the final transcript string that becomes the user message for the LLM.
+      </p>
+      <div class="pills">
+        <span class="pill g">get_model_for_language</span>
+        <span class="pill g">Transcriber</span>
+        <span class="pill g">transcribe_without_streaming</span>
+      </div>
+      <div class="viz">
+        <div class="viz-label">transcription — audio → text</div>
+        <div id="sttViz" style="padding:.8rem 0;font-size:.85rem;">
+          <span style="color:var(--muted);font-size:.7rem;">INPUT</span>
+          <div style="margin:.3rem 0 .8rem;color:var(--grn);opacity:.6;font-size:.72rem;" id="sttAudio">
+            ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓ (audio waveform)</div>
+          <span style="color:var(--muted);font-size:.7rem;">OUTPUT</span>
+          <div style="margin:.3rem 0;color:var(--text);font-size:.92rem;" id="sttText"></div>
+        </div>
+      </div>
+      <div class="codeblk">
+        <span class="cm"># load model once at startup</span><br>
+        ms_path, ms_arch = <span class="fn">get_model_for_language</span>(<span class="str">"en"</span>)<br>
+        moonshine = <span class="fn">Transcriber</span>(model_path=<span class="fn">str</span>(ms_path),
+        model_arch=ms_arch)<br><br>
+        <span class="cm"># transcribe each utterance</span><br>
+        heard = <span class="str">" "</span>.<span class="fn">join</span>(<br>
+        &nbsp;&nbsp;l.text <span class="kw">for</span> l <span class="kw">in</span> moonshine.<span
+          class="fn">transcribe_without_streaming</span>(<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;audio_data.<span class="fn">tolist</span>(), <span class="num">16000</span>).lines <span
+          class="kw">if</span> l.text<br>
+        ).<span class="fn">strip</span>()
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════ STAGE 6: mlx-vlm ═══════════════════════ -->
+  <section class="stage" id="s5">
+    <span class="stage-num">06</span>
+    <div class="stage-inner">
+      <div class="badge">importance 10 / 10 <span class="role-tag role-proc">LLM brain</span></div>
+      <h2><span class="hl-c">mlx-vlm</span> — the brain</h2>
+      <p class="imp hl-c">Gemma 4 E4B running on Apple Metal via MLX — the core intelligence of the agent.</p>
+      <p class="desc">
+        The transcript is formatted into a chat message list with system prompt (from <strong>SOUL.md</strong>)
+        and conversation history. <strong>apply_chat_template</strong> converts it to a prompt string,
+        then <strong>stream_generate</strong> produces tokens one-by-one in a <strong>background thread</strong>.
+        Each completed sentence is pushed onto a queue so TTS can start speaking while the LLM is
+        still generating the rest — this is the key to low-latency responses.
+      </p>
+      <div class="pills">
+        <span class="pill">load(model_name)</span>
+        <span class="pill">generate</span>
+        <span class="pill">stream_generate</span>
+        <span class="pill">processor.apply_chat_template</span>
+      </div>
+      <div class="viz">
+        <div class="viz-label">streaming token generation — sentence dispatch</div>
+        <div class="tokens" id="tokenStream"></div>
+      </div>
+      <div class="codeblk">
+        <span class="cm"># format conversation</span><br>
+        prompt = processor.<span class="fn">apply_chat_template</span>(messages,<br>
+        &nbsp;&nbsp;tokenize=<span class="num">False</span>, add_generation_prompt=<span
+          class="num">True</span>)<br><br>
+        <span class="cm"># stream tokens in background thread</span><br>
+        <span class="kw">for</span> result <span class="kw">in</span> <span class="fn">stream_generate</span>(model,
+        processor, prompt,<br>
+        &nbsp;&nbsp;max_tokens=<span class="num">200</span>, temperature=<span class="num">0.7</span>,
+        repetition_penalty=<span class="num">1.2</span>):<br>
+        &nbsp;&nbsp;token_buf += result.text<br>
+        &nbsp;&nbsp;<span class="kw">if</span> sentence_complete:<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;q.<span class="fn">put</span>(sentence) <span class="cm"># → TTS starts
+          immediately</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════ STAGE 7: kokoro-onnx ═══════════════════════ -->
+  <section class="stage" id="s6">
+    <span class="stage-num">07</span>
+    <div class="stage-inner">
+      <div class="badge">importance 9 / 10 <span class="role-tag role-proc">synthesis</span></div>
+      <h2><span class="hl-g">kokoro-onnx</span> — the voice</h2>
+      <p class="desc">
+        Sentences from the LLM queue are synthesised in <strong>pairs</strong> (for natural prosody)
+        using Kokoro's ONNX model on CPU. Each synthesis runs in a <strong>thread executor</strong>
+        so it overlaps with playback of the previous sentence. Output is a float32 numpy array
+        at 24 kHz, ready for the speaker.
+      </p>
+      <div class="pills">
+        <span class="pill g">Kokoro(model_file, voices_file)</span>
+        <span class="pill g">kokoro.create(text, voice, speed, lang)</span>
+      </div>
+      <div class="viz">
+        <div class="viz-label">TTS waveform synthesis — text → audio</div>
+        <canvas id="vizTTS" height="60"></canvas>
+      </div>
+      <div class="codeblk">
+        <span class="cm"># synthesise sentence pairs in background</span><br>
+        <span class="kw">async def</span> <span class="fn">_synth</span>(text):<br>
+        &nbsp;&nbsp;<span class="kw">return await</span> loop.<span class="fn">run_in_executor</span>(<span
+          class="num">None</span>,<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span class="kw">lambda</span>: kokoro.<span class="fn">create</span>(text,<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;voice=<span class="str">"af_heart"</span>, speed=<span
+          class="num">1.0</span>, lang=<span class="str">"en-us"</span>))<br><br>
+        <span class="cm"># group sentences in twos for better prosody</span><br>
+        samples, sr = <span class="kw">await</span> <span class="fn">_synth</span>(<span class="str">" "</span>.<span
+          class="fn">join</span>([sent_a, sent_b]))
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════ STAGE 8: sounddevice OUT + livekit AEC ═══════════════════════ -->
+  <section class="stage" id="s7">
+    <span class="stage-num">08</span>
+    <div class="stage-inner">
+      <div class="badge">importance 10 + 8 <span class="role-tag role-io">output + interrupt</span></div>
+      <h2><span class="hl-a">sounddevice</span> out + <span class="hl-c">livekit</span> AEC3</h2>
+      <p class="imp hl-a">sounddevice returns as the output path — this time paired with echo cancellation for barge-in.
+      </p>
+      <p class="desc">
+        TTS audio plays through <strong>sd.OutputStream</strong> in 4096-sample frames. Between each
+        frame, the mic queue is drained and each chunk is fed through <strong>LiveKit's APM</strong>
+        (WebRTC AEC3) with the TTS audio as the reference signal. The echo-cancelled mic audio is
+        then checked by <strong>Silero VAD</strong> — if 5 consecutive chunks show speech above 0.8
+        probability, the agent is interrupted.
+      </p>
+      <div class="pills">
+        <span class="pill a">sd.OutputStream.write</span>
+        <span class="pill a">sd.stop</span>
+        <span class="pill">AudioProcessingModule</span>
+        <span class="pill">apm.process_reverse_stream</span>
+        <span class="pill">apm.process_stream</span>
+        <span class="pill">AudioFrame</span>
+      </div>
+      <div class="viz">
+        <div class="viz-label">AEC pipeline — mic + reference → cleaned audio → VAD</div>
+        <div class="aec-diagram">
+          <div class="aec-box" style="border-color:var(--amb)">🎤 Mic chunk</div>
+          <span class="aec-arrow">→</span>
+          <div class="aec-box" style="border-color:var(--cyan)">AEC3<br><span
+              style="font-size:.6rem;color:var(--muted)">subtract TTS ref</span></div>
+          <span class="aec-arrow">→</span>
+          <div class="aec-box" style="border-color:var(--mag)">VAD<br><span
+              style="font-size:.6rem;color:var(--muted)">prob &gt; 0.8?</span></div>
+          <span class="aec-arrow">→</span>
+          <div class="aec-box" style="border-color:var(--grn)">5× speech<br><span
+              style="font-size:.6rem;color:var(--muted)">→ interrupt!</span></div>
+        </div>
+      </div>
+      <div class="codeblk">
+        <span class="cm"># AEC: subtract TTS from mic, check for real speech</span><br>
+        apm = <span class="fn">AudioProcessingModule</span>(echo_cancellation=<span class="num">True</span>,
+        noise_suppression=<span class="num">True</span>)<br><br>
+        <span class="kw">while</span> <span class="kw">not</span> audio_q.<span class="fn">empty</span>():<br>
+        &nbsp;&nbsp;mic_chunk = audio_q.<span class="fn">get_nowait</span>()<br>
+        &nbsp;&nbsp;ref = <span class="fn">_get_ref_segment</span>(tts_concat, mic_pos, <span
+          class="fn">len</span>(mic_chunk))<br>
+        &nbsp;&nbsp;cleaned = <span class="fn">aec_process</span>(mic_chunk, ref)<br>
+        &nbsp;&nbsp;<span class="kw">if</span> <span class="fn">_vad_prob</span>(vad, cleaned) > <span
+          class="num">0.8</span>:<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;consec_speech += <span class="num">1</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span class="kw">if</span> consec_speech >= <span class="num">5</span>: <span
+          class="kw">return</span> <span class="num">True</span> <span class="cm"># barge-in!</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════ NATIVE MODULES ═══════════════════════ -->
+  <section class="native">
+    <div class="native-inner">
+      <h2>Standard Library <span class="hl-c">Foundation</span></h2>
+      <p class="sub">The Python stdlib modules that hold everything together.</p>
+      <div class="mod-grid" id="modGrid"></div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════ FOOTER ═══════════════════════ -->
+  <footer>
+    <p>Voice Loop Pipeline Visualisation — built from <a
+        href="https://github.com/TrelisResearch/voice-loop">TrelisResearch/voice-loop</a></p>
+  </footer>
+
+  <!-- ═══════════════════════ JAVASCRIPT ═══════════════════════ -->
+  <script>
+    (function () {
+      const {animate, scroll, inView, stagger} = Motion;
+
+      /* ── Hero waveform canvas ── */
+      const heroC = document.getElementById('heroWave');
+      const heroCtx = heroC.getContext('2d');
+      let heroPhase = 0;
+      function drawHero() {
+        const w = heroC.width, h = heroC.height;
+        heroCtx.clearRect(0, 0, w, h);
+        heroPhase += 0.025;
+        for (let layer = 0; layer < 3; layer++) {
+          heroCtx.beginPath();
+          const alpha = 0.15 + layer * 0.12;
+          const amp = 12 + layer * 6;
+          const freq = 0.008 + layer * 0.003;
+          const speed = heroPhase * (1 + layer * 0.4);
+          heroCtx.strokeStyle = `rgba(0,229,255,${alpha})`;
+          heroCtx.lineWidth = 1.5;
+          for (let x = 0; x < w; x++) {
+            const y = h / 2 + Math.sin(x * freq + speed) * amp * Math.sin(x * 0.002 + speed * 0.3);
+            x === 0 ? heroCtx.moveTo(x, y) : heroCtx.lineTo(x, y);
+          }
+          heroCtx.stroke();
+        }
+        requestAnimationFrame(drawHero);
+      }
+      drawHero();
+
+      /* ── Hero entrance animations ── */
+      animate('.hero-tag', {opacity: [0, 0.55], y: [12, 0]}, {duration: 0.8, delay: 0.2});
+      animate('.hero h1', {opacity: [0, 1], y: [24, 0]}, {duration: 0.9, delay: 0.4});
+      animate('.hero-sub', {opacity: [0, 1], y: [12, 0]}, {duration: 0.7, delay: 0.7});
+      animate('.scroll-cue', {opacity: [0, 1]}, {duration: 0.6, delay: 1.3});
+
+      /* ── Pipeline bar state ── */
+      const nodes = document.querySelectorAll('.pn');
+      const lines = document.querySelectorAll('.pn-line');
+      function setPipe(idx) {
+        nodes.forEach((n, i) => {
+          n.classList.toggle('on', i <= idx);
+        });
+        lines.forEach((l, i) => {
+          l.classList.toggle('on', i < idx);
+        });
+      }
+      nodes.forEach((n, i) => {
+        n.addEventListener('click', () => {
+          const el = document.getElementById('s' + i);
+          if (el) el.scrollIntoView({behavior: 'smooth'});
+        });
+      });
+
+      /* ── Stage scroll tracking ── */
+      const stageIds = ['s0', 's1', 's2', 's3', 's4', 's5', 's6', 's7'];
+      let activeStage = -1;
+      stageIds.forEach((id, i) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        // Lighten pipeline nodes once the section has scrolled past
+        inView(el, () => {
+          activeStage = i;
+          setPipe(i);
+        }, {amount: 0.3});
+        // Animate stage content on first enter
+        inView(el, () => {
+          animate(el.querySelectorAll('.badge, h2, .imp, .desc, .pills, .codeblk, .viz, .aec-diagram'),
+            {opacity: [0, 1], y: [20, 0]},
+            {duration: 0.5, delay: stagger(0.08)}
+          );
+        }, {amount: 0.15});
+      });
+
+      /* ── sounddevice viz (live mic simulation) ── */
+      const sdC = document.getElementById('vizSD');
+      const sdCtx = sdC.getContext('2d');
+      let sdPhase = 0;
+      function drawSD() {
+        const w = sdC.width, h = sdC.height;
+        sdCtx.clearRect(0, 0, w, h);
+        sdPhase += 0.06;
+        // Draw 32ms chunks as vertical blocks
+        const chunkW = 18;
+        const chunks = Math.ceil(w / (chunkW + 4));
+        for (let i = 0; i < chunks; i++) {
+          const x = i * (chunkW + 4);
+          const amp = Math.abs(Math.sin(sdPhase + i * 0.4)) * 0.7 + Math.random() * 0.3;
+          const barH = amp * (h - 10);
+          const alpha = 0.3 + amp * 0.5;
+          sdCtx.fillStyle = `rgba(255,181,69,${alpha})`;
+          sdCtx.fillRect(x, (h - barH) / 2, chunkW, barH);
+          // Chunk label
+          if (i % 3 === 0) {
+            sdCtx.fillStyle = 'rgba(255,181,69,0.3)';
+            sdCtx.font = '9px JetBrains Mono';
+            sdCtx.fillText('32ms', x, h - 2);
+          }
+        }
+        requestAnimationFrame(drawSD);
+      }
+      drawSD();
+
+      /* ── numpy bars viz ── */
+      const npRow = document.getElementById('npBars');
+      const NUM_BARS = 64;
+      for (let i = 0; i < NUM_BARS; i++) {
+        const b = document.createElement('div');
+        b.className = 'b';
+        b.style.height = '2px';
+        npRow.appendChild(b);
+      }
+      let npPhase = 0;
+      function animateNpBars() {
+        npPhase += 0.03;
+        const bars = npRow.children;
+        for (let i = 0; i < bars.length; i++) {
+          const v = Math.abs(Math.sin(npPhase + i * 0.15)) * 0.8 + Math.random() * 0.2;
+          bars[i].style.height = (v * 54 + 2) + 'px';
+        }
+        requestAnimationFrame(animateNpBars);
+      }
+      animateNpBars();
+
+      /* ── VAD probability viz ── */
+      const vadFill = document.getElementById('vadFill');
+      const vadVal = document.getElementById('vadVal');
+      let vadPhase = 0;
+      function animateVad() {
+        vadPhase += 0.015;
+        const p = (Math.sin(vadPhase) * 0.5 + 0.5) * 0.95 + 0.05;
+        vadFill.style.width = (p * 100) + '%';
+        vadFill.style.background = p > 0.5 ? 'var(--grn)' : 'var(--mag)';
+        vadVal.textContent = p.toFixed(2) + (p > 0.5 ? ' ✓ SPEECH' : ' · silence');
+        requestAnimationFrame(animateVad);
+      }
+      animateVad();
+
+      /* ── Smart Turn probability viz ── */
+      const stFill = document.getElementById('stFill');
+      const stVal = document.getElementById('stVal');
+      let stPhase = 0;
+      function animateST() {
+        stPhase += 0.01;
+        // Simulate: silence builds, then turn confirmed
+        const cycle = stPhase % (Math.PI * 4);
+        const p = cycle < Math.PI * 2.5
+          ? Math.sin(cycle * 0.6) * 0.35 + 0.15
+          : 0.5 + (cycle - Math.PI * 2.5) * 0.35;
+        const clamped = Math.min(1, Math.max(0, p));
+        stFill.style.width = (clamped * 100) + '%';
+        stFill.style.background = clamped >= 0.5 ? 'var(--grn)' : 'var(--pur)';
+        stVal.textContent = clamped.toFixed(2) + (clamped >= 0.5 ? ' ✓ TURN COMPLETE' : ' · still listening');
+        requestAnimationFrame(animateST);
+      }
+      animateST();
+
+      /* ── STT transcription viz ── */
+      const sttText = document.getElementById('sttText');
+      const phrases = [
+        "What's the weather like today?",
+        "Tell me about machine learning.",
+        "Can you explain echo cancellation?",
+        "Set a reminder for tomorrow.",
+        "How does voice activity detection work?"
+      ];
+      let phraseIdx = 0;
+      function typeSTT() {
+        const phrase = phrases[phraseIdx % phrases.length];
+        sttText.textContent = '';
+        let ci = 0;
+        const iv = setInterval(() => {
+          if (ci < phrase.length) {
+            sttText.textContent += phrase[ci];
+            ci++;
+          } else {
+            clearInterval(iv);
+            setTimeout(() => {phraseIdx++; typeSTT();}, 2200);
+          }
+        }, 38);
+      }
+      typeSTT();
+
+      /* ── LLM token stream viz ── */
+      const tokenEl = document.getElementById('tokenStream');
+      const sentences = [
+        "The weather today is partly cloudy with a high of 72°F.",
+        "Machine learning is a subset of artificial intelligence.",
+        "Echo cancellation removes the speaker output from the mic signal.",
+        "I've set a reminder for tomorrow at 9 AM.",
+        "Voice activity detection uses neural networks to classify audio frames."
+      ];
+      let sentIdx = 0;
+      function streamTokens() {
+        tokenEl.innerHTML = '';
+        const words = sentences[sentIdx % sentences.length].split(' ');
+        let wi = 0;
+        const iv = setInterval(() => {
+          if (wi < words.length) {
+            const tok = document.createElement('span');
+            tok.className = 'tok';
+            tok.textContent = (wi === 0 ? '' : ' ') + words[wi];
+            tokenEl.appendChild(tok);
+            requestAnimationFrame(() => tok.classList.add('vis'));
+            wi++;
+          } else {
+            clearInterval(iv);
+            // Add sentence-end marker
+            const dot = document.createElement('span');
+            dot.className = 'tok';
+            dot.textContent = ' ← sentence dispatched to TTS';
+            dot.style.color = 'var(--cyan)';
+            dot.style.borderColor = 'rgba(0,229,255,.3)';
+            tokenEl.appendChild(dot);
+            requestAnimationFrame(() => dot.classList.add('vis'));
+            setTimeout(() => {sentIdx++; streamTokens();}, 2800);
+          }
+        }, 80);
+      }
+      streamTokens();
+
+      /* ── TTS waveform viz ── */
+      const ttsC = document.getElementById('vizTTS');
+      const ttsCtx = ttsC.getContext('2d');
+      let ttsPhase = 0;
+      function drawTTS() {
+        const w = ttsC.width, h = ttsC.height;
+        ttsCtx.clearRect(0, 0, w, h);
+        ttsPhase += 0.04;
+        // Progress line
+        const progress = (Math.sin(ttsPhase * 0.3) * 0.5 + 0.5);
+        const px = progress * w;
+        // Draw waveform
+        ttsCtx.beginPath();
+        ttsCtx.strokeStyle = 'rgba(57,255,142,0.5)';
+        ttsCtx.lineWidth = 1.5;
+        for (let x = 0; x < w; x++) {
+          const env = x < px ? 1 : 0.15;
+          const y = h / 2 + Math.sin(x * 0.05 + ttsPhase) * 18 * env * Math.sin(x * 0.012 + ttsPhase * 0.5);
+          x === 0 ? ttsCtx.moveTo(x, y) : ttsCtx.lineTo(x, y);
+        }
+        ttsCtx.stroke();
+        // Progress marker
+        ttsCtx.fillStyle = 'rgba(57,255,142,0.7)';
+        ttsCtx.fillRect(px - 1, 0, 2, h);
+        // Label
+        ttsCtx.fillStyle = 'rgba(57,255,142,0.4)';
+        ttsCtx.font = '9px JetBrains Mono';
+        ttsCtx.fillText('synthesising...', Math.max(4, px - 60), 12);
+        requestAnimationFrame(drawTTS);
+      }
+      drawTTS();
+
+      /* ── Native modules grid ── */
+      const modules = [
+        {name: 'threading', imp: 9, role: 'LLM background worker thread for sentence streaming', code: 'Thread(target, daemon=True)'},
+        {name: 'asyncio', imp: 8, role: 'TTS playback pipeline with concurrent synthesis tasks', code: 'asyncio.run() / Queue / create_task'},
+        {name: 'queue', imp: 8, role: 'Thread-safe mic audio queue and LLM sentence queue', code: 'Queue() / .put() / .get()'},
+        {name: 'argparse', imp: 7, role: 'All CLI flags (--tts, --aec, --smart-turn, --voice, etc.)', code: 'BooleanOptionalAction'},
+        {name: 'termios + tty', imp: 7, role: 'Raw terminal mode for instant keypress interrupt', code: 'setcbreak() / tcsetattr()'},
+        {name: 'select', imp: 6, role: 'Non-blocking stdin poll during TTS for keypress detection', code: 'select([stdin], 0)'},
+        {name: 'wave', imp: 5, role: 'WAV file writing for debug recording and temp audio', code: 'wave.open() / writeframes()'},
+        {name: 're', imp: 5, role: 'Sentence-splitting regex for streaming TTS dispatch', code: "compile(r'(?<=[.!?])\\s+')"},
+        {name: 'concurrent.futures', imp: 5, role: 'ThreadPoolExecutor for parallel STT in audio mode', code: 'executor.submit()'},
+        {name: 'tempfile', imp: 4, role: 'Model cache directories and temporary WAV files', code: 'gettempdir() / NamedTemporaryFile'},
+        {name: 'os / pathlib', imp: 4, role: 'File paths, env vars, model directory management', code: 'Path(__file__).parent'},
+        {name: 'time', imp: 4, role: 'Timing for chime alignment, sleeps, recording names', code: 'monotonic() / sleep()'},
+        {name: 'subprocess', imp: 3, role: 'Auto-detect espeak-ng library path for Kokoro', code: 'check_output(["brew",...])'},
+        {name: 'urllib.request', imp: 2, role: 'One-time model file downloads from GitHub/HF', code: 'urlretrieve(url, path)'},
+      ];
+      const grid = document.getElementById('modGrid');
+      modules.forEach(m => {
+        const card = document.createElement('div');
+        card.className = 'mod-card';
+        card.innerHTML = `
+      <h3>${m.name} <span style="font-size:.68rem;color:var(--cyan);font-weight:400;margin-left:.3rem;">${m.imp}/10</span></h3>
+      <div class="role">${m.role}</div>
+      <code>${m.code}</code>
+    `;
+        grid.appendChild(card);
+      });
+      // Animate cards on scroll
+      inView('#modGrid', () => {
+        animate(grid.querySelectorAll('.mod-card'),
+          {opacity: [0, 1], y: [16, 0]},
+          {duration: 0.4, delay: stagger(0.05)}
+        );
+      }, {amount: 0.15});
+
+    })();
+  </script>
+</body>
+
+</html>
