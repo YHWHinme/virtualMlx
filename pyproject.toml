@@ -14,8 +14,12 @@ dependencies = [
     "onnxruntime>=1.17",
     "transformers>=4.38",
     "huggingface-hub>=0.20",
-    "ollama>=0.4",
     "rich>=13.0",
+    "langchain",
+    "langchain-core",
+    "langchain-ollama",
+    "langchain-mcp-adapters",
+    "langgraph",
 ]
 
 [tool.ruff.lint]

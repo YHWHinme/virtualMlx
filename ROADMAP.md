@@ -9,13 +9,13 @@
 - [x] Conversation history (last 10 turns)
 - [x] Sentence-level streaming TTS dispatch
 
-## LangChain Replacement ← we are here
-- [ ] Replace raw `ollama` package with LangChain
-- [ ] Structured prompt management
-- [ ] Better conversation memory (summarization, retrieval)
-- [ ] Websearch capabilities (via tool calling)
+## LangChain Replacement ✓
+- [x] Replace raw `ollama` package with LangChain (`ChatOllama`)
+- [x] Structured prompt management (`SYSTEM.md` via `create_agent` prompt)
+- [x] Better conversation memory (LangGraph checkpointer, per-thread)
+- [x] Websearch capabilities (MCP via `langchain-mcp-adapters` + web-search-mcp)
 
-## Barehands Integration
+## Barehands Integration ← we are here
 - [x] Wire barehands glass board as the visual interface
 - [x] Ring face: reflect agent state (idle / listening / thinking / speaking)
 - [ ] Hub swiping: feed notes and 3D models into the AI context via gestures

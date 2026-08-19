@@ -1,24 +1,35 @@
-"""model.py — Ollama LLM client with streaming, sentence splitting, and history.
+"""model.py — LangChain + Ollama agent with MCP tools and conversation memory.
 
-Wraps the ``ollama`` Python package to provide:
-  - Streaming token generation (``chat_stream``)
-  - Sentence-aware streaming (``stream_sentences``) for low-latency TTS dispatch
-  - Conversation history (last N turns, configurable)
-  - Live-reloaded system prompt from SOUL.md
+Replaces the raw ollama package with:
+  - ChatOllama (langchain-ollama) as the LLM
+  - create_agent (langgraph) for automatic tool-calling + checkpointer memory
+  - MultiServerMCPClient (langchain-mcp-adapters) for websearch via MCP
+  - SentenceAccumulator for low-latency TTS dispatch
+
+Conversation history is checkpointed per thread so multi-turn context
+persists across turns automatically (LangGraph short-term memory).
 """
 
 import re
+import urllib.request
 
-from ollama import Client
+# AI Imports
+from langchain_ollama import ChatOllama
+from langgraph.checkpoint.memory import MemorySaver
+from rich.console import Console
 
 from config import (
-    MAX_HISTORY,
     MAX_TOKENS,
     OLLAMA_HOST,
     OLLAMA_MODEL,
-    SOUL_PATH,
+    PARALLEL_API_KEY,
+    PARALLEL_SEARCH_URL,
+    SENTENCE_MIN_CHARS,
+    SYSTEM_PATH,
     TEMPERATURE,
 )
+
+console = Console()
 
 _SENT_END = re.compile(r"(?<=[.!?])\s+")
 
@@ -27,9 +38,9 @@ _SENT_END = re.compile(r"(?<=[.!?])\s+")
 
 
 def _load_soul() -> str:
-    """Read the system prompt from SOUL.md (re-read each turn for live edits)."""
-    if SOUL_PATH.exists():
-        return SOUL_PATH.read_text().strip()
+    """Read the system prompt from SYSTEM.md."""
+    if SYSTEM_PATH.exists():
+        return SYSTEM_PATH.read_text().strip()
     return "You are a helpful voice assistant. Speak naturally and concisely."
 
 
@@ -60,7 +71,6 @@ class SentenceAccumulator:
             fragment = self._buffer[: m.start() + 1].strip()
             self._buffer = self._buffer[m.end() :]
 
-            # Merge short fragments
             self._carry = (
                 (self._carry + " " + fragment).strip() if self._carry else fragment
             )
@@ -84,79 +94,137 @@ class SentenceAccumulator:
 
 
 class Model:
-    """Ollama LLM interface with conversation history and streaming."""
+    """LangChain agent: ChatOllama + MCP tools + checkpointed memory."""
 
-    def __init__(self):
-        print(f"Connecting to Ollama at {OLLAMA_HOST}…")
-        self._client = Client(host=OLLAMA_HOST)
-        self._history: list[dict] = []
+    @classmethod
+    async def create(cls) -> "Model":
+        """Async factory — sets up the LLM, MCP tools, and the agent."""
+        self = cls()
 
+
+        # create_agent moved between packages across versions — try both
         try:
-            self._client.list()
-            print(f"  Ollama connected ✓ (model: {OLLAMA_MODEL})")
-        except Exception as e:  # noqa: BLE001
-            print(f"  ⚠ Could not reach Ollama ({e})")
-            print(f"    Make sure Ollama is running at {OLLAMA_HOST}")
+            from langchain.agents import create_agent
+        except ImportError:
+            from langgraph.prebuilt import create_agent
 
-    # ── message construction ─────────────────────────────────────
+        console.print(f"Connecting to Ollama at {OLLAMA_HOST}…")
+        self._llm = ChatOllama(
+            model=OLLAMA_MODEL,
+            base_url=OLLAMA_HOST,
+            temperature=TEMPERATURE,
+            num_predict=MAX_TOKENS,
+        )
 
-    def _build_messages(self, user_text: str) -> list[dict]:
-        """Build the chat message list: system prompt + history + current input."""
-        messages: list[dict] = []
+        # Lightweight connectivity check (no model call — just /api/tags)
+        try:
+            urllib.request.urlopen(f"{OLLAMA_HOST}/api/tags", timeout=2)  # noqa: ASYNC210
+            console.print(f"  Ollama connected [green]✓[/] (model: {OLLAMA_MODEL})")
+        except Exception:  # noqa: BLE001
+            console.print(f"  [yellow]⚠ Ollama unreachable at {OLLAMA_HOST}[/]")
+
+        # MCP tools (parallel.ai websearch) — checks API key + connection
+        tools = await self._load_mcp_tools()
 
         soul = _load_soul()
-        if soul:
-            messages.append({"role": "system", "content": soul})
+        self._checkpointer = MemorySaver()
+        self._thread_id = "virtualmlx"
 
-        for turn in self._history[-MAX_HISTORY:]:
-            messages.append({"role": "user", "content": turn["user"]})
-            messages.append({"role": "assistant", "content": turn["assistant"]})
-
-        messages.append({"role": "user", "content": user_text})
-        return messages
-
-    # ── chat modes ───────────────────────────────────────────────
-
-    def chat(self, user_text: str) -> str:
-        """Blocking chat — sends the full message, waits for the full response."""
-        messages = self._build_messages(user_text)
-        response = self._client.chat(
-            model=OLLAMA_MODEL,
-            messages=messages,
-            options={"temperature": TEMPERATURE, "num_predict": MAX_TOKENS},
+        self._agent = create_agent(
+            self._llm,
+            tools=tools,
+            system_prompt=soul,
+            checkpointer=self._checkpointer,
         )
-        reply = response["message"]["content"]
-        self._history.append({"user": user_text, "assistant": reply})
-        return reply
+        console.print(f"  Agent ready [green]✓[/] (tools: {len(tools)})")
+        return self
 
-    def chat_stream(self, user_text: str):
-        """Streaming chat — yields raw text chunks as they arrive from Ollama."""
-        messages = self._build_messages(user_text)
-        full_response = ""
+    # ── MCP tool loading ─────────────────────────────────────────
 
-        for chunk in self._client.chat(
-            model=OLLAMA_MODEL,
-            messages=messages,
-            stream=True,
-            options={"temperature": TEMPERATURE, "num_predict": MAX_TOKENS},
-        ):
-            content = chunk["message"]["content"]
-            if content:
-                full_response += content
-                yield content
+    async def _load_mcp_tools(self) -> list:
+        """Load websearch tools from the parallel.ai remote MCP server.
 
-        self._history.append({"user": user_text, "assistant": full_response})
-
-    def stream_sentences(self, user_text: str):
-        """Stream the LLM response as complete sentences.
-
-        Each yielded string is a full sentence ready for TTS synthesis.
-        Short fragments are merged to avoid TTS artifacts.
+        Uses the streamable-HTTP transport (no local Node.js or playwright).
+        basic mode is free & anonymous — an API key is optional and only
+        raises rate limits.  Returns an empty list on connection failure.
         """
-        acc = SentenceAccumulator()
+        console.print("  Connecting to parallel.ai MCP…")
+        console.print(f"    url: [dim]{PARALLEL_SEARCH_URL}[/]")
 
-        for chunk in self.chat_stream(user_text):
-            yield from acc.feed(chunk)
+        # basic mode = anonymous; Bearer key optional for higher limits
+        headers = (
+            {"Authorization": f"Bearer {PARALLEL_API_KEY}"}
+            if PARALLEL_API_KEY
+            else {}
+        )
+        if PARALLEL_API_KEY:
+            console.print("    auth: [green]Bearer API key[/] (higher limits)")
+        else:
+            console.print("    auth: [dim]anonymous (basic mode, free)[/]")
+
+        try:
+            from langchain_mcp_adapters.client import MultiServerMCPClient
+
+            client = MultiServerMCPClient(
+                {
+                    "parallel-web-search": {
+                        "url": PARALLEL_SEARCH_URL,
+                        "transport": "streamable_http",
+                        "headers": headers or None,
+                    }
+                }
+            )
+            tools = await client.get_tools()
+            if tools:
+                names = ", ".join(t.name for t in tools)
+                console.print(f"  parallel.ai connected [green]✓[/] ({len(tools)} tools)")
+                console.print(f"    tools: [dim]{names}[/]")
+                return tools
+            console.print("  [yellow]⚠ connected but no tools returned[/]")
+            return []
+        except Exception as e:  # noqa: BLE001
+            console.print(f"  [yellow]⚠ parallel.ai connection failed: {e}[/]")
+            return []
+
+    # ── streaming response ───────────────────────────────────────
+
+    async def stream_sentences(self, user_text: str):
+        """Stream the agent's text response as complete sentences.
+
+        Prints debug messages when a websearch tool is called and when it
+        returns.  Only the final assistant *text* tokens go to TTS.
+        """
+        from langchain_core.messages import AIMessageChunk, ToolMessage
+
+        config = {"configurable": {"thread_id": self._thread_id}}
+        acc = SentenceAccumulator(min_chars=SENTENCE_MIN_CHARS)
+        tool_active = False  # track so we print one debug line per call
+
+        async for chunk, _metadata in self._agent.astream(
+            {"messages": [{"role": "user", "content": user_text}]},
+            config,
+            stream_mode="messages",
+        ):
+            if isinstance(chunk, AIMessageChunk):
+                # Debug: the model just decided to call a tool
+                if chunk.tool_call_chunks and not tool_active:
+                    for tc in chunk.tool_call_chunks:
+                        name = tc.get("name") if isinstance(tc, dict) else None
+                        if name:
+                            console.print(f"  [bold yellow]🔍 {name}[/] …")
+                            tool_active = True
+                            break
+                # Text content → sentence accumulator for TTS
+                content = chunk.content
+                if isinstance(content, str) and content:
+                    for sentence in acc.feed(content):
+                        yield sentence
+
+            elif isinstance(chunk, ToolMessage):
+                # Debug: the tool returned its result
+                tname = getattr(chunk, "name", "tool") or "tool"
+                console.print(f"  [green]✓ {tname}[/] returned")
+                tool_active = False
 
         remainder = acc.flush()
         if remainder:

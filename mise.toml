@@ -16,3 +16,6 @@ description = "Run the barehands glass-board server (blocking, foreground)"
 [tasks.lint]
 run = "ruff check"
 description = "Run the ruff linter"
+
+[env]
+OLLAMA_MODEL = "gemma4:cloud"

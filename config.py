@@ -30,6 +30,11 @@ MAX_HISTORY = 10              # Conversation turns in context
 MAX_TOKENS = 300
 TEMPERATURE = 0.7
 
+# ── MCP / Websearch (parallel.ai — remote streamable-HTTP MCP) ──
+# basic mode is free & anonymous; API key optional for higher rate limits.
+PARALLEL_SEARCH_URL = os.getenv("PARALLEL_SEARCH_URL", "https://search.parallel.ai/mcp")
+PARALLEL_API_KEY = os.getenv("PARALLEL_API_KEY", "")
+
 # ── Microphone ───────────────────────────────────────────────────
 MIC_NAME = "UGREEN"           # Substring to match in device name
 MIC_DEVICE_INDEX: int | None = None  # None = auto-detect by MIC_NAME
@@ -41,5 +46,5 @@ BAREHANDS_HOST = os.getenv("BAREHANDS_HOST", "127.0.0.1")
 
 # ── Paths ────────────────────────────────────────────────────────
 PROJECT_DIR = Path(__file__).parent
-SOUL_PATH = PROJECT_DIR / "SYSTEM.md"
+SYSTEM_PATH = PROJECT_DIR / "SYSTEM.md"
 MODEL_CACHE_DIR = PROJECT_DIR / ".model_cache"

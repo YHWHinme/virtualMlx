@@ -12,6 +12,8 @@ Local voice agent combining proven on-device speech tech with a cloud LLM.
   - macOS: `brew install espeak-ng`
   - Ubuntu: `sudo apt install espeak-ng`
 - **Ollama** running with the `gemma4:cloud` model pulled
+- **Parallel.ai API key** (for websearch via MCP — optional, agent runs without it)
+  - Set `PARALLEL_API_KEY` env var; server is `https://search.parallel.ai/mcp`
 - **barehands** server (for the glass board)
   - `cd /home/oj2/projects/clones/barehands && python3 server.py`
   - open `http://127.0.0.1:8794/stage.html` in Chrome for the tracker
@@ -37,7 +39,8 @@ mise run go           # or: uv run main.py
 | Turn detection | Smart Turn v3 (ONNX) | CPU, ~8 MB |
 | Speech-to-text | Moonshine | CPU, ~250 MB |
 | Text-to-speech | Kokoro v1.0 (ONNX) | CPU, ~300 MB |
-| LLM | Ollama (`gemma4:cloud`) | Cloud |
+| LLM | Ollama (`gemma4:cloud`) via LangChain | Cloud |
+| Agent | LangGraph `create_agent` + MCP tools | Local |
 | Glass board | barehands | Localhost |
 
 ## File Structure
@@ -48,7 +51,7 @@ mise run go           # or: uv run main.py
 | `board.py` | barehands bridge + run as blocking server (`uv run board.py`) |
 | `UTILITIES/listener.py` | Mic capture via sounddevice, Silero VAD, Smart Turn |
 | `UTILITIES/transformer.py` | Moonshine STT + Kokoro TTS + volume/loudness indicator |
-| `UTILITIES/model.py` | Ollama client with streaming, sentence splitting, history |
+| `UTILITIES/model.py` | LangChain agent (ChatOllama + MCP websearch + memory) |
 | `config.py` | All constants: sample rates, thresholds, model names, paths |
 | `SYSTEM.md` | System prompt — live-reloaded each turn |
 
@@ -63,3 +66,5 @@ Environment variables (override defaults in `config.py`):
 | `BAREHANDS_HOST` | `127.0.0.1` | barehands server host |
 | `BAREHANDS_PORT` | `8794` | barehands server port |
 | `TTS_VOLUME` | `12` | Agent response loudness (1-20, 10 = normal) |
+| `PARALLEL_API_KEY` | *(unset)* | Parallel.ai API key for websearch (required for search) |
+| `PARALLEL_SEARCH_URL` | `https://search.parallel.ai/mcp` | Parallel.ai MCP endpoint |
