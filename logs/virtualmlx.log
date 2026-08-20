@@ -1,0 +1,29 @@
+02:21:20 INFO     [virtualmlx] ============================================================
+02:21:20 INFO     [virtualmlx] VirtualMlx session started
+02:21:20 INFO     [virtualmlx] ============================================================
+02:21:27 DEBUG    [virtualmlx.board] Barehands board not reachable
+02:21:27 WARNING  [virtualmlx.main] Barehands board not running — voice-only mode
+02:21:27 INFO     [virtualmlx.listener] Mic details: index=8 name=UGREEN Camera: USB Audio (hw:3,0) channels=2 sr=44100Hz latency_low=0.0087s latency_high=0.0348s hostapi=0
+02:21:27 INFO     [virtualmlx.listener] Loading Silero VAD
+02:21:28 INFO     [virtualmlx.listener] Silero VAD loaded
+02:21:28 INFO     [virtualmlx.listener] Loading Smart Turn
+02:21:29 INFO     [virtualmlx.listener] Downloading / loading Smart Turn v3
+02:21:29 WARNING  [virtualmlx.listener] Smart Turn unavailable: 404 Client Error. (Request ID: Root=1-6a87a7b2-2069def43786ff0503c66cb1;f3f26562-a6df-43fe-9a4b-1852377a9d2e)
+
+Entry Not Found for url: https://huggingface.co/onnx-community/smart-turn-v3-ONNX/resolve/main/model.onnx. — falling back to silence detection
+02:21:29 INFO     [virtualmlx.transformer] Loading Moonshine STT
+02:21:31 INFO     [virtualmlx.transformer] Moonshine STT loaded
+02:21:31 INFO     [virtualmlx.transformer] Loading Kokoro TTS
+02:21:33 INFO     [virtualmlx.transformer] Kokoro TTS loaded (voice: am_michael, vol: 17/20)
+02:21:33 INFO     [virtualmlx.memory] Initialising Cognee memory
+02:25:53 INFO     [virtualmlx.memory] No prior memory found — will be created on first remember (data: /home/oj2/projects/clones/VirtualMlx/.data_storage, system: /home/oj2/projects/clones/VirtualMlx/.cognee_system)
+02:25:53 INFO     [virtualmlx.model] Connecting to Ollama at http://localhost:11434
+02:25:53 INFO     [virtualmlx.model] Ollama connected (model: gemma4:cloud)
+02:25:53 INFO     [virtualmlx.model] Connecting to parallel.ai MCP at https://search.parallel.ai/mcp
+02:25:53 INFO     [virtualmlx.model] MCP auth: anonymous (basic mode)
+02:25:55 INFO     [virtualmlx.model] parallel.ai connected (2 tools: web_search, web_fetch)
+02:25:56 INFO     [virtualmlx.model] Agent ready (tools: 7, history: 0 turns)
+02:26:15 DEBUG    [virtualmlx.listener] Captured 0.7s of audio
+02:26:15 DEBUG    [virtualmlx.main] Empty transcription, skipping
+02:33:04 DEBUG    [virtualmlx.listener] Captured 0.7s of audio
+02:33:04 DEBUG    [virtualmlx.main] Empty transcription, skipping

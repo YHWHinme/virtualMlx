@@ -193,11 +193,14 @@ class Model:
 
     # ── streaming response ───────────────────────────────────────
 
-    async def stream_sentences(self, user_text: str):
+    async def stream_sentences(self, user_text: str, break_check=None):
         """Stream the agent's text response as complete sentences.
 
         Prints debug messages when a websearch tool is called and when it
         returns.  Only the final assistant *text* tokens go to TTS.
+
+        If ``break_check`` (a zero-arg callable returning bool) is supplied,
+        the stream stops early when it returns truthy (Ctrl-B barge-in).
         """
         from langchain_core.messages import AIMessageChunk, ToolMessage
 
@@ -205,32 +208,51 @@ class Model:
         acc = SentenceAccumulator(min_chars=SENTENCE_MIN_CHARS)
         tool_active = False  # track so we print one debug line per call
 
-        async for chunk, _metadata in self._agent.astream(
+        aiter = self._agent.astream(
             {"messages": [{"role": "user", "content": user_text}]},
             config,
             stream_mode="messages",
-        ):
-            if isinstance(chunk, AIMessageChunk):
-                # Debug: the model just decided to call a tool
-                if chunk.tool_call_chunks and not tool_active:
-                    for tc in chunk.tool_call_chunks:
-                        name = tc.get("name") if isinstance(tc, dict) else None
-                        if name:
-                            console.print(f"  [bold yellow]🔍 {name}[/] …")
-                            tool_active = True
-                            break
-                # Text content → sentence accumulator for TTS
-                content = chunk.content
-                if isinstance(content, str) and content:
-                    for sentence in acc.feed(content):
-                        yield sentence
+        )
+        # ``completed`` is set True only when the stream exhausts without a
+        # break. It gates the post-loop remainder yield so that we NEVER yield
+        # out of ``finally`` — yielding during an ``aclose()`` (GeneratorExit)
+        # is what raised "async generator ignored GeneratorExit".
+        completed = False
+        try:
+            async for chunk, _metadata in aiter:
+                if break_check is not None and break_check():
+                    break
+                if isinstance(chunk, AIMessageChunk):
+                    # Debug: the model just decided to call a tool
+                    if chunk.tool_call_chunks and not tool_active:
+                        for tc in chunk.tool_call_chunks:
+                            name = tc.get("name") if isinstance(tc, dict) else None
+                            if name:
+                                console.print(f"  [bold yellow]🔍 {name}[/] …")
+                                tool_active = True
+                                break
+                    # Text content → sentence accumulator for TTS
+                    content = chunk.content
+                    if isinstance(content, str) and content:
+                        for sentence in acc.feed(content):
+                            yield sentence
 
-            elif isinstance(chunk, ToolMessage):
-                # Debug: the tool returned its result
-                tname = getattr(chunk, "name", "tool") or "tool"
-                console.print(f"  [green]✓ {tname}[/] returned")
-                tool_active = False
+                elif isinstance(chunk, ToolMessage):
+                    # Debug: the tool returned its result
+                    tname = getattr(chunk, "name", "tool") or "tool"
+                    console.print(f"  [green]✓ {tname}[/] returned")
+                    tool_active = False
+            else:
+                completed = True
+        finally:
+            # Cleanup only — NEVER yield here. If the caller abandoned us
+            # (barge-in, exception, or aclose) the partial remainder is
+            # discarded so we don't speak a trailing fragment.
+            if not completed:
+                acc.flush()
 
+        # Reached only on normal completion (no break, no GeneratorExit).
+        # During an aclose(), control never gets here, so this yield is safe.
         remainder = acc.flush()
         if remainder:
             yield remainder

@@ -215,10 +215,13 @@ class Listener:
 
     # ── public API ───────────────────────────────────────────────
 
-    def listen(self) -> np.ndarray:
+    def listen(self, stop_check=None) -> np.ndarray:
         """Block until a complete utterance is captured.
 
         Returns a float32 numpy array of the full utterance at 16 kHz.
+        If ``stop_check`` is provided and returns True mid-capture, the stream
+        is aborted and an empty array is returned (caller should treat empty
+        as "interrupted, no utterance").
         """
         import sounddevice as sd
 
@@ -249,7 +252,15 @@ class Listener:
 
             with Live(passive, console=console, refresh_per_second=10) as live:
                 while True:
-                    chunk = self._audio_q.get()
+                    if stop_check is not None and stop_check():
+                        # External interrupt (e.g. listen-toggle pressed) —
+                        # abandon the current capture and return empty.
+                        self.vad.reset_states()
+                        return np.array([], dtype=np.float32)
+                    try:
+                        chunk = self._audio_q.get(timeout=0.05)
+                    except queue.Empty:
+                        continue
                     prob = _vad_prob(self.vad, chunk)
 
                     if prob > VAD_THRESHOLD:

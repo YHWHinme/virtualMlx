@@ -7,3 +7,7 @@ __pycache__/
 *.wav
 uv.lock
 ./OUTPUT/
+.cognee_system/
+.data_storage/
+logs/
+*.log

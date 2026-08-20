@@ -21,7 +21,7 @@ TTS_VOICE = "am_michael"      # US English male (Kokoro v1.0)
 TTS_SPEED = 1.0
 TTS_LANG = "en-us"
 SENTENCE_MIN_CHARS = 20       # Min chars before dispatching a sentence
-TTS_VOLUME = int(os.getenv("TTS_VOLUME", "12"))  # 1-20 loudness (10 = normal)
+TTS_VOLUME = int(os.getenv("TTS_VOLUME", "14"))  # 1-20 loudness (10 = normal)
 
 # ── LLM ──────────────────────────────────────────────────────────
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma4:cloud")
@@ -42,6 +42,19 @@ PARALLEL_API_KEY = os.getenv("PARALLEL_API_KEY", "")
 # ── Microphone ───────────────────────────────────────────────────
 MIC_NAME = "UGREEN"           # Substring to match in device name
 MIC_DEVICE_INDEX: int | None = None  # None = auto-detect by MIC_NAME
+
+# ── Break-in (barge-in) ───────────────────────────────────────────
+# Ctrl-B (0x02) — key-based interrupt during think/speak phases.
+# Chosen over Ctrl-S (0x13 = XOFF) to avoid flow-control conflicts.
+BREAK_IN_KEY = 0x02
+
+# ── Listen toggle (pause/resume mic) ─────────────────────────────
+# Ctrl-T (0x14) — toggle whether the agent is listening for speech.
+# Works any time: during the listen phase (aborts the current capture)
+# or while thinking/speaking (takes effect on the next loop). When paused
+# the ring goes idle + red mood; press again to resume.
+# Chosen to avoid flow-control (Ctrl-S) and screen-clear (Ctrl-L) conflicts.
+TOGGLE_LISTEN_KEY = 0x14
 
 # ── Barehands ────────────────────────────────────────────────────
 BAREHANDS_DIR = Path("/home/oj2/projects/clones/barehands")

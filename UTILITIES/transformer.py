@@ -9,7 +9,6 @@ import urllib.request
 
 import numpy as np
 from rich.console import Console
-from rich.live import Live
 from rich.text import Text
 
 from config import (
@@ -69,16 +68,6 @@ def _loudness_bar(level: int, volume: int = TTS_VOLUME, max_lvl: int = 20) -> Te
     )
 
 
-def _rms_to_level(samples: np.ndarray, max_lvl: int = 20) -> int:
-    """Map a chunk's RMS amplitude to a 1-20 level."""
-    if len(samples) == 0:
-        return 1
-    rms = float(np.sqrt(np.mean(samples.astype(np.float32) ** 2)))
-    # Speech RMS typically 0.02-0.30; map that range onto 1-20
-    level = int(1 + (rms / 0.30) * (max_lvl - 1))
-    return max(1, min(max_lvl, level))
-
-
 # ── Transformer class ────────────────────────────────────────────
 
 
@@ -102,6 +91,7 @@ class Transformer:
         self._kokoro = Kokoro(model_file, voices_file)
         console.print(f"  Kokoro loaded [green]✓[/] (voice: {TTS_VOICE}, "
                       f"vol: {TTS_VOLUME}/20)")
+        console.print(_loudness_bar(TTS_VOLUME))
 
     # ── STT ──────────────────────────────────────────────────────
 
@@ -124,19 +114,24 @@ class Transformer:
         )
         return samples, sr
 
-    def speak(self, text: str, on_chunk=None):
+    def speak(self, text: str, on_chunk=None, break_check=None):
         """Synthesize text and play it through the speakers via sounddevice.
 
-        Applies the configured volume gain (TTS_VOLUME / 10) and shows a
-        live 1-20 loudness indicator during playback.  Optional
-        ``on_chunk(samples)`` callback receives each audio chunk so callers
-        (e.g. board.py) can stream a waveform to the barehands ring.
+        Applies the configured volume gain (TTS_VOLUME / 10).  The 1-20
+        loudness level is shown once at initialization (see __init__), not
+        during playback.  Optional ``on_chunk(samples)`` callback receives
+        each audio chunk so callers (e.g. board.py) can stream a waveform
+        to the barehands ring.
+
+        If ``break_check`` (a zero-arg callable returning bool) is supplied,
+        it is polled between every audio frame; a truthy result stops
+        playback immediately (Ctrl-B barge-in). Returns True if interrupted.
         """
         import sounddevice as sd
 
         samples, sr = self.synthesize(text)
         if len(samples) == 0:
-            return
+            return False
 
         # Apply volume gain (1-20 scale, 10 = normal 1.0x) + clip to avoid artifacts
         gain = TTS_VOLUME / 10.0
@@ -145,16 +140,18 @@ class Transformer:
 
         stream = sd.OutputStream(samplerate=sr, channels=1, dtype="float32")
         stream.start()
+        interrupted = False
         try:
-            with Live(_loudness_bar(1), console=console, refresh_per_second=20) as live:
-                # 4096 samples ≈ 170ms at 24kHz
-                for i in range(0, len(data), 4096):
-                    chunk = data[i : i + 4096]
-                    stream.write(chunk)
-                    flat = chunk.flatten()
-                    live.update(_loudness_bar(_rms_to_level(flat)))
-                    if on_chunk is not None:
-                        on_chunk(flat)
+            # 4096 samples ≈ 170ms at 24kHz — barge-in checked ~6x/sec
+            for i in range(0, len(data), 4096):
+                if break_check is not None and break_check():
+                    interrupted = True
+                    break
+                chunk = data[i : i + 4096]
+                stream.write(chunk)
+                if on_chunk is not None:
+                    on_chunk(chunk.flatten())
         finally:
             stream.stop()
             stream.close()
+        return interrupted

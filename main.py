@@ -10,6 +10,7 @@ from rich.console import Console
 from rich.panel import Panel
 
 import board
+from UTILITIES.keyboard import BreakInController
 from UTILITIES.listener import Listener
 from UTILITIES.model import Model
 from UTILITIES.transformer import Transformer
@@ -37,6 +38,9 @@ class VirtualMlx:
 
         self.listener = Listener()
         self.transformer = Transformer()
+        self._break = BreakInController()
+        self._break.enter_raw()
+        self._listening = True  # toggled by Ctrl-T (see config.TOGGLE_LISTEN_KEY)
         # model is set up async in run()
 
     async def run(self):
@@ -48,18 +52,46 @@ class VirtualMlx:
             board.set_mood("green")
 
         console.print(Panel.fit(
-            "Ready. Speak anytime.\n[dim]Press Ctrl+C to exit.[/]",
+            "Ready. Speak anytime.\n[dim]Press Ctrl-T to pause/resume listening, "
+            "Ctrl-B to interrupt, Ctrl+C to exit.[/]",
             border_style="green",
         ))
 
         while True:
             try:
+                # ── NOTE: Apply any pending listen-toggle (Ctrl-T) request ──
+                # The watcher thread sets the toggle event any time the key is
+                # pressed. If listen() returned empty it already saw the toggle;
+                # if we were paused we poll it here too.
+                if self._break.consume_toggle():
+                    self._listening = not self._listening
+                    if self._listening:
+                        console.print("  [bold green]▶ Listening resumed[/]")
+                    else:
+                        console.print("  [bold yellow]⏸  Listening paused "
+                                      "(Ctrl-T to resume)[/]")
+                        if self._board:
+                            board.set_ring_state("idle")
+                            board.set_mood("red")
+
+                if not self._listening:
+                    # Paused — wait quietly for the next toggle, no mic capture.
+                    await asyncio.sleep(0.05)
+                    continue
+
                 # ── NOTE: Listen (sync — blocks the loop, fine: no async work
                 #     happens until the agent runs) ──
                 if self._board:
                     board.set_ring_state("listening")
                     board.set_mood("amber")
-                audio = self.listener.listen()
+                audio = self.listener.listen(
+                    stop_check=self._break.toggle_is_set
+                )
+
+                # Empty capture ⇒ interrupted by toggle (handled above on the
+                # next iteration). Skip transcription.
+                if audio.size == 0:
+                    continue
 
                 # ── NOTE: Transcribe ──
                 if self._board:
@@ -78,18 +110,31 @@ class VirtualMlx:
                 console.print("  [dim]Thinking…[/]")
                 spoken_any = False
 
-                async for sentence in self.model.stream_sentences(text):
-                    console.print(f"  [bold magenta]Mlx:[/] {sentence}")
-                    self.transformer.speak(
-                        sentence,
-                        on_chunk=lambda s: board.set_wave(_extract_waveform(s))
-                        if self._board else None,
-                    )
-                    spoken_any = True
+                # Arm Ctrl-B break-in for the whole think+speak phase.
+                self._break.arm()
+                try:
+                    async for sentence in self.model.stream_sentences(
+                        text, break_check=self._break.is_set
+                    ):
+                        console.print(f"  [bold magenta]Mlx:[/] {sentence}")
+                        self.transformer.speak(
+                            sentence,
+                            on_chunk=lambda s: board.set_wave(_extract_waveform(s))
+                            if self._board else None,
+                            break_check=self._break.is_set,
+                        )
+                        spoken_any = True
+                        if self._break.triggered:
+                            break
+                finally:
+                    self._break.disarm()
+
+                if self._break.triggered:
+                    console.print("  [bold yellow]⏹  interrupted[/]")
 
                 if self._board:
                     board.set_wave([])
-                if not spoken_any:
+                if not spoken_any and not self._break.triggered:
                     console.print("  [yellow](no response generated)[/]")
 
             except KeyboardInterrupt:
@@ -97,6 +142,7 @@ class VirtualMlx:
                 break
             except Exception as e:  # noqa: BLE001
                 console.print(f"  [red bold]Error:[/] {e}")
+                self._break.disarm()
                 continue
             finally:
                 if self._board:
@@ -116,4 +162,7 @@ def _extract_waveform(samples, bins: int = 64) -> list[float]:
 
 if __name__ == "__main__":
     mlx = VirtualMlx()
-    asyncio.run(mlx.run())
+    try:
+        asyncio.run(mlx.run())
+    finally:
+        mlx._break.exit_raw()

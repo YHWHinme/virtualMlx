@@ -19,3 +19,4 @@ description = "Run the ruff linter"
 
 [env]
 OLLAMA_MODEL = "gemma4:cloud"
+TTS_VOLUME = "17"
