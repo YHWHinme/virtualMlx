@@ -54,14 +54,14 @@ class VirtualMlx:
 
         while True:
             try:
-                # ── Listen (sync — blocks the loop, fine: no async work
+                # ── NOTE: Listen (sync — blocks the loop, fine: no async work
                 #     happens until the agent runs) ──
                 if self._board:
                     board.set_ring_state("listening")
                     board.set_mood("amber")
                 audio = self.listener.listen()
 
-                # ── Transcribe ──
+                # ── NOTE: Transcribe ──
                 if self._board:
                     board.set_ring_state("thinking")
                 console.print("  [dim]Transcribing…[/]")
@@ -71,7 +71,7 @@ class VirtualMlx:
                     continue
                 console.print(f"  [bold cyan]You:[/] {text}")
 
-                # ── Think + Speak (async stream → sync TTS) ──
+                # ── NOTE: Think + Speak (async stream → sync TTS) ──
                 if self._board:
                     board.set_ring_state("speaking")
                     board.set_mood("green")

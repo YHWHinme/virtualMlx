@@ -126,6 +126,11 @@ class Model:
         # MCP tools (parallel.ai websearch) — checks API key + connection
         tools = await self._load_mcp_tools()
 
+        # Local sandboxed file tools (create/edit/read in OUTPUT/) — always
+        # available, no external service needed.
+        from UTILITIES.file_tools import file_tools
+        tools = tools + file_tools
+
         soul = _load_soul()
         self._checkpointer = MemorySaver()
         self._thread_id = "virtualmlx"

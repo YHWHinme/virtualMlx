@@ -27,7 +27,11 @@ TTS_VOLUME = int(os.getenv("TTS_VOLUME", "12"))  # 1-20 loudness (10 = normal)
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma4:cloud")
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
 MAX_HISTORY = 10              # Conversation turns in context
-MAX_TOKENS = 300
+# Token budget for the model's *output* — this also covers tool-call
+# arguments, so a tiny value truncates large `create_file` content mid-call
+# (the cause of empty/partial OUTPUT files). Set high enough to emit a whole
+# document in one tool call; voice conciseness is governed by SYSTEM.md.
+MAX_TOKENS = int(os.getenv("MAX_TOKENS", "8192"))
 TEMPERATURE = 0.7
 
 # ── MCP / Websearch (parallel.ai — remote streamable-HTTP MCP) ──
@@ -48,3 +52,15 @@ BAREHANDS_HOST = os.getenv("BAREHANDS_HOST", "127.0.0.1")
 PROJECT_DIR = Path(__file__).parent
 SYSTEM_PATH = PROJECT_DIR / "SYSTEM.md"
 MODEL_CACHE_DIR = PROJECT_DIR / ".model_cache"
+
+# ── NOTE: File tools (sandboxed to OUTPUT/) ─────────────────────────────
+# NOTE: All agent file create/edit operations are confined to this directory.
+# A relative path is resolved under it; any attempt to escape (.., absolute
+# paths, symlinks) is rejected by the sandbox check in UTILITIES/file_tools.py.
+OUTPUT_DIR = PROJECT_DIR / "OUTPUT"
+# Allowed extensions for create_file — keeps the agent from writing binaries
+# or executables into the sandbox. Edit/read allow the same set.
+OUTPUT_ALLOWED_SUFFIXES = {
+    ".txt", ".md", ".json", ".yaml", ".yml", ".csv", ".html",
+    ".css", ".js", ".ts", ".py", ".sh", ".toml", ".ini", ".log",
+}

@@ -44,7 +44,7 @@ def is_connected() -> bool:
         return False
 
 
-# ── State file helpers (Seam 1: the ring face) ───────────────────
+# ── NOTE: State file helpers (Seam 1: the ring face) ───────────────────
 
 _STATE_DIR = Path(BAREHANDS_DIR) / "state"
 
@@ -76,7 +76,7 @@ def set_wave(samples: list[float]):
     )
 
 
-# ── Board commands (Seam 2: the agent's hands) ───────────────────
+# ── NOTE: Board commands (Seam 2: the agent's hands) ───────────────────
 
 
 def cmd(action: str, **kwargs) -> bool:
@@ -111,7 +111,7 @@ def clear() -> bool:
     return cmd("clear")
 
 
-# ── Board state (Seam 3: the agent's eyes) ───────────────────────
+# ── NOTE: Board state (Seam 3: the agent's eyes) ───────────────────────
 
 
 def get_board_state() -> dict | None:
